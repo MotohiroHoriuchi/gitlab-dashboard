@@ -24,6 +24,7 @@ export default function Dashboard() {
     status: "all",
     sort: "linger",
     labels: [],
+    assignees: [],
     groupBy: DEFAULT_GROUP_BY,
     hovered: null,
     panel: "ranking",
@@ -174,6 +175,20 @@ export default function Dashboard() {
             <button
               style={S("padding:5px 10px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:600; font-family:'Inter',system-ui,sans-serif; border:1px solid rgb(61 58 57); background:transparent; color:rgb(110 118 129);")}
               onClick={v.clearBtn.onClick}
+            >
+              クリア
+            </button>
+          </div>
+        </div>
+        <div style={S("display:flex; align-items:center; gap:9px; flex:1; min-width:260px;")}>
+          <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600; flex:0 0 auto;")}>担当者</span>
+          <div style={S("display:flex; flex-wrap:wrap; gap:6px;")}>
+            {v.assigneeChips.map((c, i) => (
+              <button key={i} style={c.style} onClick={c.onClick}>{c.name}</button>
+            ))}
+            <button
+              style={S("padding:5px 10px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:600; font-family:'Inter',system-ui,sans-serif; border:1px solid rgb(61 58 57); background:transparent; color:rgb(110 118 129);")}
+              onClick={v.clearAssigneeBtn.onClick}
             >
               クリア
             </button>

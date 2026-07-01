@@ -161,7 +161,9 @@ export interface Vals {
   showDist: boolean;
   panelTabs: { ranking: Btn; dist: Btn };
   labelChips: Chip[];
+  assigneeChips: Chip[];
   clearBtn: { onClick: () => void };
+  clearAssigneeBtn: { onClick: () => void };
   gridStyle: CSSProperties;
   topN: number;
   rankTrackStyle: CSSProperties;
@@ -190,6 +192,15 @@ export function deriveLabelDefs(issues: Issue[]): LabelDef[] {
   return [...m.entries()]
     .map(([n, v]) => ({ n, c: v.c, count: v.count }))
     .sort((a, b) => b.count - a.count || a.n.localeCompare(b.n));
+}
+
+/** Unique assignees with frequency, most-active first — powers the assignee filter chips. */
+export function deriveAssignees(issues: Issue[]): { name: string; count: number }[] {
+  const m = new Map<string, number>();
+  for (const it of issues) m.set(it.assignee, (m.get(it.assignee) || 0) + 1);
+  return [...m.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 /* ------------------------------------------------------------------ *
@@ -221,7 +232,8 @@ export function renderVals(
   // ── filtering ──
   const pass = (it: Issue) =>
     (st.status === "all" || (st.status === "open" ? it.isOpen : !it.isOpen)) &&
-    (st.labels.length === 0 || st.labels.includes(it.label.name));
+    (st.labels.length === 0 || st.labels.includes(it.label.name)) &&
+    (st.assignees.length === 0 || st.assignees.includes(it.assignee));
   const filtered = data.filter(pass);
   const openArr = filtered.filter((i) => i.isOpen);
   const closedArr = filtered.filter((i) => !i.isOpen);
@@ -286,6 +298,8 @@ export function renderVals(
           transition: "width .45s cubic-bezier(.4,0,.2,1)",
           flex: "0 0 auto",
           boxSizing: "border-box",
+          // cap so the trailing day label always has room and never overflows the card
+          maxWidth: "calc(100% - 92px)",
         }
       : {
           width: pct + "%",
@@ -294,6 +308,7 @@ export function renderVals(
           background: rgb(c),
           transition: "width .45s cubic-bezier(.4,0,.2,1)",
           flex: "0 0 auto",
+          maxWidth: "calc(100% - 92px)",
         };
     return {
       rankLabel: i + 1 + ".",
@@ -603,6 +618,17 @@ export function renderVals(
     },
     style: chip(st.labels.includes(l.n)),
   }));
+  const assigneeChips: Chip[] = deriveAssignees(data).map((a) => ({
+    name: a.name,
+    onClick: () =>
+      patch((s) => ({
+        assignees: s.assignees.includes(a.name)
+          ? s.assignees.filter((x) => x !== a.name)
+          : s.assignees.concat(a.name),
+      })),
+    dotStyle: { display: "none" }, // assignees have no color — text-only chip
+    style: chip(st.assignees.includes(a.name)),
+  }));
 
   return {
     repo: meta.repo,
@@ -638,7 +664,9 @@ export function renderVals(
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
     },
     labelChips,
+    assigneeChips,
     clearBtn: { onClick: () => patch({ labels: [] }) },
+    clearAssigneeBtn: { onClick: () => patch({ assignees: [] }) },
     gridStyle,
     topN,
     rankTrackStyle,

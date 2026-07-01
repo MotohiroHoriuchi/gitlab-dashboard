@@ -37,6 +37,7 @@ export interface DashState {
   status: StatusFilter;
   sort: SortMode;
   labels: string[];
+  assignees: string[];
   groupBy: GroupBy;
   hovered: string | null;
   panel: Panel;
