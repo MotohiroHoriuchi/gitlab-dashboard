@@ -1,16 +1,71 @@
 # GitLab イシュー分析ダッシュボード
 
-実 GitLab プロジェクトの Issues を可視化する **Next.js（App Router）** アプリ。
-3 つのビューをタブで切り替えて表示する:
+> **「遅れてる？ オンスケ？」を、GitLab の Issue から一枚で。** 管理職にそのまま見せられる、"見るだけ" のダッシュボード。
 
-- **イシュー一覧** — 滞留期間ランキング（ガント風バー）＋サマリー指標
-- **Close 日数の分布** — ラベル / 担当者 / マイルストーン別の箱ひげ図
-- **カレンダー** — マイルストーン／イシューの月・2週タイムライン
+小さなチームで GitLab を使っている。進捗を聞かれるたびに Issue を開いて回り、「あれは遅れ気味、これはオンスケ…」と頭の中で組み立て直す。かといって有料プランや Jira を入れるほどでもない（社内承認もだるい）。Excel で予定表を作るのは、もっとやりたくない。
 
-フィルタ・並べ替え・ホバー詳細つき。ヘッダーには GitLab の実プロジェクト名を表示する。
-claude.ai/design のデザインコンポーネントを実装したもの（`design/` に元ソースを保存）。
+欲しいのは「管理」より「俯瞰」。今どうなっているかを、ぱっと見で、そのまま管理職に見せられる一枚。それだけ。
 
-## アーキテクチャ
+——だからこのダッシュボードは GitLab の Issue を **読むだけ**。編集は今までどおり GitLab で。遅れ／オンスケが色とバーで一目で分かる俯瞰図を、**追加課金なし**で。
+
+**こんな人に:**
+
+- GitLab は使ってるけど、有料プランや Jira を入れるほどじゃない小さなチーム
+- 「進捗どう？」に、ぱっと見で答えたい／管理職に見せたい
+- 管理というより、自分たちの進み具合を俯瞰して振り返りたい
+- Excel の予定表づくりや手集計から解放されたい
+- 編集は GitLab でいい、**見るだけ**でいい（read-only・`read_api` トークン1本）
+- とにかくめんどくさいのは避けたい（`MOCK_GITLAB=1` で認証なしに即お試し）
+
+![3つのビューを切り替える様子](docs/overview.gif)
+
+> タブで **イシュー一覧 → Close日数の分布 → カレンダー** を切り替え。凡例の ★（チェックポイント＝節目）をクリックすると光る。集計はすべてブラウザ内で即時、GitLab への往復なし。
+
+## 3つのビュー
+
+### 1. イシュー一覧 — どれが長引いてる？
+
+![イシュー一覧](docs/ranking.png)
+
+Open→Close の滞留日数をガント風バーでランキング。上段に Open / Close 件数・平均 / 中央値 Close 日数・最長滞留のサマリー。**緑 <30日 ／ 黄 >30日 ／ 赤 >90日**、斜線は未解決（Open）。長引いている案件が上から並ぶので「放置」に気づける。状態・ラベル・担当者で絞り込み、長引き順 / 新しい順 / 古い順で並べ替え。
+
+### 2. Close日数の分布 — 何が・誰が時間かかってる？
+
+![Close日数の分布](docs/distribution.png)
+
+ラベル / 担当者 / マイルストーン別の箱ひげ図（箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値）。「このラベルは中央値◯日、でも外れ値でたまに長引く」といった **傾向とばらつき** が見える。行ホバーで統計の詳細（件数・未解決・最小/最大・IQR・外れ値）。
+
+### 3. カレンダー — 遅れてる？ オンスケ？（納期予実）
+
+![カレンダー](docs/calendar.png)
+
+マイルストーン / イシューを月・2週タイムラインで表示。上部に **納期予実サマリー**（納期遵守率・遅延完了・期限超過）。予定（`due_date`）を過ぎた分は **赤ハッチ**、予定日に ▼ ティック、★ はチェックポイント。バーにホバーすれば、予定と実績のズレ（予実差分）まで一目:
+
+![カレンダーのホバー詳細](docs/calendar-tooltip.png)
+
+## クイックスタート
+
+**まず動かす（GitLab 不要）** — サンプルデータで全機能を表示:
+
+```sh
+npm install
+MOCK_GITLAB=1 npm run dev     # → http://localhost:48273
+```
+
+**実データにつなぐ** — `.env.example` を写して GitLab の値を入れるだけ:
+
+```sh
+cp .env.example .env.local
+# GITLAB_BASE_URL / GITLAB_PROJECT_ID / GITLAB_TOKEN（read_api スコープ）を編集
+npm run dev                   # → http://localhost:48273
+```
+
+トークンは **サーバ側（Route Handler）でのみ** 使い、ブラウザには出さない。GitLab 応答は 60 秒キャッシュ。Docker での起動は下記「詳細」を参照。
+
+## 詳細
+
+<details>
+<summary><b>アーキテクチャ</b></summary>
 
 ```
 Browser ─▶ Next.js(:48273)
@@ -22,8 +77,12 @@ Browser ─▶ Next.js(:48273)
 - **GitLab トークンはサーバ側（Route Handler）でのみ使用**し、ブラウザへ露出しない。
 - バックエンドは生 Issue＋マイルストーンを1回配信、集計はクライアント（クリックごとの往復なし）。
 - GitLab 応答は 60 秒キャッシュ（Next の `revalidate`）。
+- 技術スタック: Next.js 16（App Router）/ React 19 / TypeScript。チャートライブラリは不使用（自前の CSS 描画）。
 
-## 必要な環境変数
+</details>
+
+<details>
+<summary><b>環境変数（全一覧）</b></summary>
 
 | 変数 | 必須 | 例 / 既定 | 説明 |
 |---|---|---|---|
@@ -33,36 +92,14 @@ Browser ─▶ Next.js(:48273)
 | `GITLAB_MAX_ISSUES` | | `2000` | 取得上限（ページング保護） |
 | `CHECKPOINT_LABEL` | | `checkpoint` | カレンダーで ★ チェックポイント扱いにするラベル名 |
 | `PORT` | | `48273` | 待受ポート（非慣例ポート） |
+| `MOCK_GITLAB` | | （未設定） | `1` で `lib/devMock.ts` のサンプルを配信（`GITLAB_*` 不要） |
 
-`.env.example` をコピーして使う:
+`.env.example` をコピーして使う（`cp .env.example .env.local`）。`.env.local` は開発（`npm run dev`）が読む。
 
-```sh
-cp .env.example .env.local   # 開発用（npm run dev が読む）
-# GITLAB_* を実際の値に編集
-```
+</details>
 
-## 開発
-
-```sh
-npm install
-npm run dev        # http://localhost:48273
-```
-
-GitLab に接続せず UI を確認したいときは、モックデータで起動できる:
-
-```sh
-MOCK_GITLAB=1 npm run dev   # lib/devMock.ts のサンプルで描画（GITLAB_* 不要）
-```
-
-その他のスクリプト:
-
-```sh
-npm test           # 変換・集計・カレンダーロジックの単体テスト (vitest)
-npm run typecheck  # 型チェック
-npm run build      # 本番ビルド（.next/standalone を生成）
-```
-
-## Docker
+<details>
+<summary><b>Docker で動かす</b></summary>
 
 `scripts/docker.sh` がビルド／起動のラッパー（推奨）:
 
@@ -96,7 +133,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
-## 機能
+</details>
+
+<details>
+<summary><b>機能の詳細</b></summary>
 
 - **サマリー指標** — Open / Close 件数、平均・中央値 Close 日数、最長滞留（Open）
 - **フィルタ** — 状態（すべて / Open / Closed）、ラベル・担当者の検索付き複数選択（クリア可）。
@@ -117,7 +157,23 @@ docker compose up --build
   - **チェックポイント**（`CHECKPOINT_LABEL`）は常に表示（あふれ対象外）＋金枠リングで強調、期限に ★。
     凡例のチェックポイントをクリックすると ★ と金枠が光り、他要素が一時的に減光する演出
 
-## ファイル構成
+</details>
+
+<details>
+<summary><b>開発・テスト</b></summary>
+
+```sh
+npm test           # 変換・集計・カレンダーロジックの単体テスト (vitest)
+npm run typecheck  # 型チェック
+npm run build      # 本番ビルド（.next/standalone を生成）
+```
+
+`MOCK_GITLAB=1` のときは `lib/devMock.ts` のサンプル（3ビューを一通り描けるよう滞留・分布・納期予実を含む）で描画する。GitLab 認証は不要。
+
+</details>
+
+<details>
+<summary><b>ファイル構成</b></summary>
 
 ```
 app/
@@ -138,11 +194,15 @@ lib/
   types.ts
   *.test.ts            # vitest（変換・集計・カレンダー）
 scripts/docker.sh      # Docker build / up / run / stop / logs ラッパー
+docs/                  # README 用スクリーンショット・GIF
 Dockerfile  docker-compose.yml  .dockerignore
 design/                # インポート元のデザインソース（参照用）
 ```
 
-## 補足（設計上の割り切り）
+</details>
+
+<details>
+<summary><b>設計上の割り切り</b></summary>
 
 - GitLab の Issue は複数ラベルを持てる。**表示**（ランキングのラベルチップ・分布のラベル別集計）は
   元デザインに合わせ **先頭ラベル（GitLab が返す配列の先頭）を代表ラベル**として 1 件に集約する。
@@ -151,6 +211,8 @@ design/                # インポート元のデザインソース（参照用�
   カレンダーの ★ チェックポイント判定も全ラベルを見る。
   ラベル無しは「未分類」。担当者無しは「未割当」、マイルストーン無しは「Backlog」。
 - 滞留日数 `linger` は、Open は「作成からの経過日数」、Closed は「作成→クローズの所要日数」。
+
+</details>
 
 ## ライセンス
 
