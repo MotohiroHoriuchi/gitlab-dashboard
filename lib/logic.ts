@@ -126,11 +126,13 @@ interface GroupOut {
   rowStyle: CSSProperties;
   onEnter: () => void;
 }
-interface Chip {
+/** One selectable option in a label/assignee filter dropdown. */
+export interface FilterOption {
   name: string;
-  onClick: () => void;
-  dotStyle: CSSProperties;
-  style: CSSProperties;
+  count: number;
+  color?: string; // "R G B" for labels; omitted for assignees
+  active: boolean;
+  onToggle: () => void;
 }
 interface Cell {
   k: string;
@@ -160,8 +162,9 @@ export interface Vals {
   showRank: boolean;
   showDist: boolean;
   panelTabs: { ranking: Btn; dist: Btn };
-  labelChips: Chip[];
-  assigneeChips: Chip[];
+  labelOptions: FilterOption[];
+  assigneeOptions: FilterOption[];
+  totalCount: number;
   clearBtn: { onClick: () => void };
   clearAssigneeBtn: { onClick: () => void };
   gridStyle: CSSProperties;
@@ -585,49 +588,28 @@ export function renderVals(
     gap: "20px",
   };
 
-  const chip = (active: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "5px 10px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "12px",
-    fontWeight: 600,
-    fontFamily: SANS,
-    transition: "all .15s",
-    border: "1px solid " + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)),
-    background: active ? rgba(T.primary, 0.12) : rgb(T.canvasSoft),
-    color: active ? rgb(T.ink) : rgb(T.body),
-  });
-  const labelChips: Chip[] = deriveLabelDefs(data).map((l) => ({
+  const labelOptions: FilterOption[] = deriveLabelDefs(data).map((l) => ({
     name: l.n,
-    onClick: () =>
+    color: l.c,
+    count: l.count,
+    active: st.labels.includes(l.n),
+    onToggle: () =>
       patch((s) => ({
         labels: s.labels.includes(l.n)
           ? s.labels.filter((x) => x !== l.n)
           : s.labels.concat(l.n),
       })),
-    dotStyle: {
-      display: "inline-block",
-      width: "8px",
-      height: "8px",
-      borderRadius: "50%",
-      background: rgb(l.c),
-      flex: "0 0 auto",
-    },
-    style: chip(st.labels.includes(l.n)),
   }));
-  const assigneeChips: Chip[] = deriveAssignees(data).map((a) => ({
+  const assigneeOptions: FilterOption[] = deriveAssignees(data).map((a) => ({
     name: a.name,
-    onClick: () =>
+    count: a.count,
+    active: st.assignees.includes(a.name),
+    onToggle: () =>
       patch((s) => ({
         assignees: s.assignees.includes(a.name)
           ? s.assignees.filter((x) => x !== a.name)
           : s.assignees.concat(a.name),
       })),
-    dotStyle: { display: "none" }, // assignees have no color — text-only chip
-    style: chip(st.assignees.includes(a.name)),
   }));
 
   return {
@@ -663,8 +645,9 @@ export function renderVals(
       ranking: { style: seg(st.panel === "ranking"), onClick: setS({ panel: "ranking" }) },
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
     },
-    labelChips,
-    assigneeChips,
+    labelOptions,
+    assigneeOptions,
+    totalCount: data.length,
     clearBtn: { onClick: () => patch({ labels: [] }) },
     clearAssigneeBtn: { onClick: () => patch({ assignees: [] }) },
     gridStyle,
