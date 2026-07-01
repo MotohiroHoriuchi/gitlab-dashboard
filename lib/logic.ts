@@ -337,17 +337,25 @@ export type Patch = (
   p: Partial<DashState> | ((s: DashState) => Partial<DashState>),
 ) => void;
 
+/** Labels an issue is filtered by: ALL of its labels, or its representative
+ *  ("未分類" when it has none) so unlabeled issues stay filterable. Display,
+ *  chips and the distribution grouping still use the single representative
+ *  label (it.label) — only filtering + the filter dropdown span every label. */
+export function issueFilterLabels(it: Issue): string[] {
+  return it.labelNames.length ? it.labelNames : [it.label.name];
+}
+
 /** Unique labels (name + color) with frequency, most-common first — powers the
- *  filter chips. */
+ *  filter dropdown. Counts every label an issue carries (not just the leading
+ *  one). Colors are only known for labels that lead some issue (it.label);
+ *  labels that never lead fall back to a neutral tone. */
 export function deriveLabelDefs(issues: Issue[]): LabelDef[] {
-  const m = new Map<string, { c: string; count: number }>();
-  for (const it of issues) {
-    const e = m.get(it.label.name);
-    if (e) e.count++;
-    else m.set(it.label.name, { c: it.label.color, count: 1 });
-  }
-  return [...m.entries()]
-    .map(([n, v]) => ({ n, c: v.c, count: v.count }))
+  const colorOf = new Map<string, string>();
+  for (const it of issues) if (!colorOf.has(it.label.name)) colorOf.set(it.label.name, it.label.color);
+  const count = new Map<string, number>();
+  for (const it of issues) for (const n of issueFilterLabels(it)) count.set(n, (count.get(n) ?? 0) + 1);
+  return [...count.entries()]
+    .map(([n, c]) => ({ n, c: colorOf.get(n) ?? T.muted, count: c }))
     .sort((a, b) => b.count - a.count || a.n.localeCompare(b.n));
 }
 
@@ -384,7 +392,7 @@ export function renderVals(
   // ── filtering ──
   const pass = (it: Issue) =>
     (st.status === "all" || (st.status === "open" ? it.isOpen : !it.isOpen)) &&
-    (st.labels.length === 0 || st.labels.includes(it.label.name)) &&
+    (st.labels.length === 0 || issueFilterLabels(it).some((n) => st.labels.includes(n))) &&
     (st.assignees.length === 0 || st.assignees.includes(it.assignee));
   const filtered = data.filter(pass);
   // Calendar reuses the same filtered issue set; milestones show unfiltered.

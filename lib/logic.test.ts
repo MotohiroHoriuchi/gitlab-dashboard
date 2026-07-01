@@ -4,7 +4,9 @@ import {
   buildCalendar,
   colOf,
   dayIndex,
+  deriveLabelDefs,
   dowOf,
+  issueFilterLabels,
   issueInterval,
   renderVals,
   windowFor,
@@ -325,5 +327,43 @@ describe("distribution box plots (renderVals)", () => {
     const v = renderVals(data, distState(), noop, meta);
     expect(names(v)).toContain("Done");
     expect(names(v)).not.toContain("Fresh");
+  });
+});
+
+describe("label filtering spans all labels (display stays on the first)", () => {
+  const meta = { repo: "r", project: "R", asOf: "2026-07-01", milestones: [], checkpointLabel: "checkpoint" };
+  const stateWithLabels = (labels: string[]): DashState => ({
+    status: "all",
+    sort: "linger",
+    labels,
+    assignees: [],
+    groupBy: "label",
+    hovered: null,
+    panel: "ranking",
+    calMode: "twoweek",
+    calAnchor: TODAY,
+  });
+  // #1 leads with A but also carries B; #2 only has A.
+  const twoLabelIssues = () => [
+    mkIssue({ id: 1, label: { name: "A", color: "1 1 1" }, labelNames: ["A", "B"] }),
+    mkIssue({ id: 2, label: { name: "A", color: "1 1 1" }, labelNames: ["A"] }),
+  ];
+
+  it("issueFilterLabels: all labels, or the representative when none", () => {
+    expect(issueFilterLabels(mkIssue({ labelNames: ["A", "B"] }))).toEqual(["A", "B"]);
+    expect(
+      issueFilterLabels(mkIssue({ label: { name: "未分類", color: "110 118 129" }, labelNames: [] })),
+    ).toEqual(["未分類"]);
+  });
+
+  it("deriveLabelDefs counts every label an issue carries, not just the first", () => {
+    const byName = Object.fromEntries(deriveLabelDefs(twoLabelIssues()).map((d) => [d.n, d.count]));
+    expect(byName).toEqual({ A: 2, B: 1 }); // B is listed even though it never leads
+  });
+
+  it("renderVals matches an issue by a non-leading label", () => {
+    const v = renderVals(twoLabelIssues(), stateWithLabels(["B"]), noop, meta);
+    expect(v.rows.length).toBe(1); // only #1 carries B
+    expect(v.filterSummary.startsWith("1 件")).toBe(true);
   });
 });
