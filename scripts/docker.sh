@@ -4,7 +4,7 @@
 set -euo pipefail
 
 IMAGE="gitlab-issue-dashboard"
-NAME="gitlab-issue-dashboard"
+NAME="gitlab-dashboard" # コンテナ名。run はこの名前の既存コンテナを rm -f してから起動する
 PORT="${PORT:-48273}" # host port; the container always listens on 48273
 
 # Resolve repo root (parent of scripts/) so the script works from any cwd.
