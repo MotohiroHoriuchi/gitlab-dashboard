@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DEFAULT_GROUP_BY, S, renderVals, type Patch } from "@/lib/logic";
+import { DAY, DEFAULT_GROUP_BY, S, renderVals, type Patch } from "@/lib/logic";
 import type { ApiResponse, DashState } from "@/lib/types";
 import FilterDropdown from "@/components/FilterDropdown";
+import CalendarView from "@/components/CalendarView";
 
 /** Full-height dark shell used for the loading / error states. */
 function Screen({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,8 @@ export default function Dashboard() {
     groupBy: DEFAULT_GROUP_BY,
     hovered: null,
     panel: "ranking",
+    calMode: "twoweek",
+    calAnchor: Math.floor(Date.now() / DAY),
   });
   const patch: Patch = (p) =>
     setSt((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
@@ -73,7 +76,12 @@ export default function Dashboard() {
     );
   }
 
-  const v = renderVals(data.issues, st, patch, { repo: data.repo, asOf: data.asOf });
+  const v = renderVals(data.issues, st, patch, {
+    repo: data.repo,
+    asOf: data.asOf,
+    milestones: data.milestones,
+    checkpointLabel: data.checkpointLabel,
+  });
 
   return (
     <div
@@ -102,6 +110,7 @@ export default function Dashboard() {
         <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>表示</span>
         <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
         <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
+        <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
       </div>
 
       {/* ── Main grid ── */}
@@ -255,7 +264,7 @@ export default function Dashboard() {
                 <button style={v.groupBtns.milestone.style} onClick={v.groupBtns.milestone.onClick}>マイルストーン</button>
               </div>
             </div>
-            <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。中央値が大きい順。行にホバーで詳細。全イシューが対象（フィルタ非依存）。</p>
+            <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。Close済み3件未満は箱を描けないため各データ点＋中央値のみ表示。中央値が大きい順。行にホバーで詳細。全イシューが対象（フィルタ非依存）。</p>
 
             <div style={S("display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
               <div></div>
@@ -306,6 +315,9 @@ export default function Dashboard() {
             </div>
           </section>
         )}
+
+        {/* Calendar tab: milestone/issue timeline (filter-dependent for issues) */}
+        {v.showCal && <CalendarView cal={v.calendar} />}
       </div>
     </div>
   );
