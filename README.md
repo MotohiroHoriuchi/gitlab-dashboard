@@ -151,3 +151,12 @@ design/                # インポート元のデザインソース（参照用�
   カレンダーの ★ チェックポイント判定も全ラベルを見る。
   ラベル無しは「未分類」。担当者無しは「未割当」、マイルストーン無しは「Backlog」。
 - 滞留日数 `linger` は、Open は「作成からの経過日数」、Closed は「作成→クローズの所要日数」。
+
+## ライセンス
+
+[MIT License](LICENSE) © 2026 Motohiro Horiuchi
+
+依存ライブラリは各自のライセンス（大半が MIT / Apache-2.0 / ISC / BSD）のまま同梱される。
+弱コピーレフト系は未改変で利用しており MIT 配布と両立する: `lightningcss`（MPL-2.0, 開発/テスト専用）、
+`@img/sharp-libvips-*`（LGPL-3.0, Next の画像最適化 optional 依存・本アプリは未使用）、
+`caniuse-lite`（CC-BY-4.0, ビルド時データ）。GPL/AGPL などの強コピーレフトは含まない。

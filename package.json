@@ -2,6 +2,8 @@
   "name": "gitlab-issue-dashboard",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
+  "author": "Motohiro Horiuchi",
   "scripts": {
     "dev": "next dev -p 48273",
     "build": "next build",
