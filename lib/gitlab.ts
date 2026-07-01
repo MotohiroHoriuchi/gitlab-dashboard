@@ -217,14 +217,23 @@ async function fetchMilestones(cfg: GitLabConfig): Promise<GitLabMilestone[]> {
   }
 }
 
-async function fetchRepoLabel(cfg: GitLabConfig): Promise<string> {
+/** Project identity for the header: `repo` = "host/group/project" (canonical
+ *  path, subtitle), `project` = GitLab's display name "Group / Project" (title).
+ *  Degrades to the configured projectId on any error. */
+async function fetchRepoMeta(cfg: GitLabConfig): Promise<{ repo: string; project: string }> {
   try {
     const res = await gitlabFetch(cfg, `/projects/${projectPath(cfg)}`);
-    const p = (await res.json()) as { path_with_namespace?: string };
+    const p = (await res.json()) as {
+      path_with_namespace?: string;
+      name_with_namespace?: string;
+    };
     const host = new URL(cfg.baseUrl).host;
-    return p.path_with_namespace ? `${host}/${p.path_with_namespace}` : cfg.projectId;
+    return {
+      repo: p.path_with_namespace ? `${host}/${p.path_with_namespace}` : cfg.projectId,
+      project: p.name_with_namespace || p.path_with_namespace || cfg.projectId,
+    };
   } catch {
-    return cfg.projectId;
+    return { repo: cfg.projectId, project: cfg.projectId };
   }
 }
 
@@ -232,13 +241,14 @@ async function fetchRepoLabel(cfg: GitLabConfig): Promise<string> {
 export async function getIssues(env?: Env): Promise<ApiResponse> {
   const cfg = getConfig(env);
   const now = Date.now();
-  const [raw, repo, rawMs] = await Promise.all([
+  const [raw, meta, rawMs] = await Promise.all([
     fetchAllRawIssues(cfg),
-    fetchRepoLabel(cfg),
+    fetchRepoMeta(cfg),
     fetchMilestones(cfg),
   ]);
   return {
-    repo,
+    repo: meta.repo,
+    project: meta.project,
     asOf: new Date(now).toISOString().slice(0, 10),
     issues: raw.map((r) => mapIssue(r, now, cfg.checkpointLabel)),
     milestones: rawMs.map(mapMilestone),

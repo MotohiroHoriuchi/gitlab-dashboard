@@ -78,6 +78,7 @@ export default function Dashboard() {
 
   const v = renderVals(data.issues, st, patch, {
     repo: data.repo,
+    project: data.project,
     asOf: data.asOf,
     milestones: data.milestones,
     checkpointLabel: data.checkpointLabel,
@@ -96,7 +97,7 @@ export default function Dashboard() {
             <div style={S("width:8px; height:8px; border-radius:50%; background:rgb(0 217 146); box-shadow:0 0 10px rgb(0 217 146 / .85);")}></div>
             <span style={S("font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>GitLab Issue Analytics</span>
           </div>
-          <h1 style={S("margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;")}>イシュー滞留 &amp; 解決時間ダッシュボード</h1>
+          <h1 style={S("margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;")}>{v.project}</h1>
           <div style={S("font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{v.repo} · {v.asOf} 時点</div>
         </div>
         <div style={S("text-align:right;")}>

@@ -192,7 +192,7 @@ describe("distribution box plots (renderVals)", () => {
     calMode: "twoweek",
     calAnchor: TODAY,
   });
-  const meta = { repo: "r", asOf: "2026-07-01", milestones: [], checkpointLabel: "checkpoint" };
+  const meta = { repo: "r", project: "R", asOf: "2026-07-01", milestones: [], checkpointLabel: "checkpoint" };
   const closed = (id: number, milestone: string, linger: number): Issue =>
     mkIssue({ id, milestone, isOpen: false, linger, closedAt: "2026-07-01" });
   const names = (v: ReturnType<typeof renderVals>) => v.groups.map((g) => g.name);

@@ -69,6 +69,7 @@ export function mockApiResponse(): ApiResponse {
   const now = Date.now();
   return {
     repo: "gitlab.example.com/team/app（モック）",
+    project: "Team / App（モック）",
     asOf: new Date(now).toISOString().slice(0, 10),
     issues: SEEDS.map((s) => toIssue(s, now)),
     milestones: MILESTONES,

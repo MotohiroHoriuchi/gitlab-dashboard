@@ -39,7 +39,8 @@ export interface Milestone {
 }
 
 export interface ApiResponse {
-  repo: string;
+  repo: string; // "host/group/project" — canonical path, shown as the subtitle
+  project: string; // GitLab display name ("Group / Project") — shown as the title
   asOf: string; // YYYY-MM-DD
   issues: Issue[];
   milestones: Milestone[];

@@ -266,6 +266,7 @@ export interface CalVals {
 
 export interface Vals {
   repo: string;
+  project: string;
   asOf: string;
   filterSummary: string;
   openCount: number;
@@ -335,7 +336,13 @@ export function renderVals(
   data: Issue[],
   st: DashState,
   patch: Patch,
-  meta: { repo: string; asOf: string; milestones: Milestone[]; checkpointLabel: string },
+  meta: {
+    repo: string;
+    project: string;
+    asOf: string;
+    milestones: Milestone[];
+    checkpointLabel: string;
+  },
 ): Vals {
   const showRank = st.panel === "ranking";
   const showDist = st.panel === "dist";
@@ -769,6 +776,7 @@ export function renderVals(
 
   return {
     repo: meta.repo,
+    project: meta.project,
     asOf: meta.asOf,
     filterSummary: filtered.length + " 件 / 全 " + data.length + " 件",
     openCount: openArr.length,
