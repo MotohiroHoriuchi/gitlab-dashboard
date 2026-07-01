@@ -34,7 +34,12 @@ require_env() {
 build() {
   require_docker
   log "ビルド: $IMAGE"
-  docker build -t "$IMAGE" .
+  # 従来ビルダー（BuildKit無効）で実行する。BuildKit はキャッシュ済みベースイメージでも
+  # docker.io へタグ解決に行くため、レジストリに到達できない環境（例: colima で docker.io を
+  # 名前解決できない）だと "FROM node:22-alpine … no such host" で失敗する。従来ビルダーは
+  # ローカルの node:22-alpine をそのまま使う。この Dockerfile は BuildKit 専用構文を使って
+  # いないので機能差はない。BuildKit を使いたい場合は DOCKER_BUILDKIT=1 で上書き可能。
+  DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-0}" docker build -t "$IMAGE" .
 }
 
 stop() {
