@@ -1,0 +1,14 @@
+services:
+  dashboard:
+    build: .
+    image: gitlab-issue-dashboard
+    ports:
+      - "48273:48273"
+    env_file:
+      - .env # GITLAB_BASE_URL / GITLAB_PROJECT_ID / GITLAB_TOKEN
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:48273/api/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

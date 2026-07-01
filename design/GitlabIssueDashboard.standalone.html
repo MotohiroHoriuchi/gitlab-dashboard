@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitLab イシュー分析ダッシュボード</title>
+
+<!-- Fonts: Inter (sans) + JetBrains Mono (mono) — matches the imported design -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- React 18 + Babel standalone (same versions the dc-runtime uses) -->
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: rgb(16 16 16); }
+  #root { min-height: 100%; }
+  /* Ranking "open" pulse dot animation (from the original design) */
+  @keyframes gi-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+  button { font: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useMemo, useState } = React;
+
+/* ------------------------------------------------------------------ *
+ *  CSS string -> React style object (so the design's literal inline
+ *  styles can be pasted verbatim). Mirrors the runtime's cssToObj.
+ * ------------------------------------------------------------------ */
+function S(css) {
+  const o = {};
+  for (const decl of css.split(';')) {
+    const i = decl.indexOf(':');
+    if (i < 0) continue;
+    const prop = decl.slice(0, i).trim();
+    if (!prop) continue;
+    const val = decl.slice(i + 1).trim();
+    o[prop.startsWith('--') ? prop : prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = val;
+  }
+  return o;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Configurable props (were `$props` on the design component).
+ * ------------------------------------------------------------------ */
+const TOP_N = 30;               // ランキング上位件数 (15–50)
+const DEFAULT_GROUP_BY = 'label'; // 箱ひげ初期グループ: 'label' | 'assignee' | 'milestone'
+
+/* ------------------------------------------------------------------ *
+ *  Logic — ported verbatim from the imported `class Component extends
+ *  DCLogic`. Pure data + math; no framework coupling.
+ * ------------------------------------------------------------------ */
+const T = {
+  canvas: '16 16 16', canvasSoft: '22 22 22', card: '26 26 26', strong: '36 36 36',
+  ink: '242 242 242', body: '189 189 189', muted: '139 148 158', mutedSoft: '110 118 129',
+  primary: '0 217 146', hairline: '61 58 57', warn: '210 153 34', err: '248 81 73', ok: '16 185 129'
+};
+const SANS = "'Inter',system-ui,-apple-system,sans-serif";
+const MONO = "'JetBrains Mono',ui-monospace,'SFMono-Regular',monospace";
+
+const rgb  = (t)    => 'rgb(' + t + ')';
+const rgba = (t, a) => 'rgb(' + t + ' / ' + a + ')';
+const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+
+function quantile(sorted, q) {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q, b = Math.floor(pos), r = pos - b;
+  return sorted[b + 1] !== undefined ? sorted[b] + r * (sorted[b + 1] - sorted[b]) : sorted[b];
+}
+function niceNum(range, round) {
+  const exp = Math.floor(Math.log10(range || 1)), f = range / Math.pow(10, exp);
+  let nf;
+  if (round) nf = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
+  else nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return nf * Math.pow(10, exp);
+}
+function makeTicks(maxVal) {
+  const range = niceNum(Math.max(maxVal, 1), false);
+  const step = niceNum(range / 5, true);
+  const niceMax = Math.max(step, Math.ceil(maxVal / step) * step);
+  const ticks = [];
+  for (let v = 0; v <= niceMax + 1e-9; v += step) ticks.push(Math.round(v));
+  return { niceMax, ticks, step };
+}
+
+/* Deterministic synthetic GitLab issue dataset (seeded — identical every load). */
+function generate() {
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  const rnd = mulberry32(20260701);
+  const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  const wpick = (a, w) => { const t = w.reduce((x, y) => x + y, 0); let r = rnd() * t; for (let i = 0; i < a.length; i++) { r -= w[i]; if (r <= 0) return a[i]; } return a[a.length - 1]; };
+
+  const LAB = [
+    { n: 'bug', c: '248 81 73', med: 5, sig: 0.75, w: 22, open: 0.16 },
+    { n: 'feature', c: '0 217 146', med: 26, sig: 0.6, w: 16, open: 0.32 },
+    { n: 'enhancement', c: '108 182 255', med: 15, sig: 0.6, w: 15, open: 0.24 },
+    { n: 'tech-debt', c: '212 167 44', med: 54, sig: 0.7, w: 10, open: 0.44 },
+    { n: 'security', c: '255 166 87', med: 20, sig: 0.95, w: 8, open: 0.20 },
+    { n: 'performance', c: '176 131 240', med: 40, sig: 0.7, w: 9, open: 0.30 },
+    { n: 'docs', c: '87 171 90', med: 6, sig: 0.6, w: 12, open: 0.14 },
+    { n: 'ux', c: '139 148 158', med: 18, sig: 0.65, w: 8, open: 0.26 }
+  ];
+  const ASG = ['佐藤 玲', '田中 健', 'A. Novak', 'P. Rao', '鈴木 詩織', 'M. Bianchi', 'L. Chen', '山本 遼'];
+  const MIL = [
+    { n: 'v1.4', a: 300, b: 520, bias: 0.4 },
+    { n: 'v1.5', a: 110, b: 300, bias: 0.9 },
+    { n: 'v1.6', a: 20, b: 150, bias: 1.4 },
+    { n: 'Backlog', a: 40, b: 560, bias: 1.7 }
+  ];
+  const TITLES = [
+    'セッショントークンが自動更新されず再ログインが必要',
+    'CSVエクスポートが10万行超でタイムアウトする',
+    'ダークモードでバッジのコントラスト比が不足',
+    'Webhook 再送時に重複イベントが発行される',
+    'ページネーション最終ページで一覧が空になる',
+    '日付フォーマットが一部ロケールで壊れる',
+    'ダッシュボード長時間表示でメモリ使用量が増加',
+    'OAuth リフレッシュのレースコンディション',
+    'アップロード進捗が99%で停止する',
+    '全文検索インデックスの再構築が遅い',
+    'モバイルでモーダル内スクロールができない',
+    'API レート制限ヘッダーの値が不正確',
+    '大量ラベル選択時にフィルタが固まる',
+    'Safari で日付ピッカーが開かない',
+    '通知メールのリンクが期限切れになる',
+    '権限変更が即時に反映されない',
+    'グラフの凡例が画面端で見切れる',
+    'マージ後に古いパイプラインが残る',
+    '添付画像のサムネイル生成に失敗',
+    '検索結果のハイライト位置がずれる',
+    '二段階認証の再設定フローが分かりにくい',
+    '大きなリポジトリで初回ロードが遅い',
+    'コメントの下書きが保存されない',
+    'Webhook 署名検証のドキュメント不足',
+    'ダッシュボードのCSVに集計列を追加したい',
+    '監査ログのエクスポート機能を追加',
+    'テーブルの列幅をユーザーごとに保存',
+    'キーボードショートカット一覧の追加'
+  ];
+
+  const N = 280, out = [];
+  for (let i = 0; i < N; i++) {
+    const lab = wpick(LAB, LAB.map(l => l.w));
+    const asg = pick(ASG);
+    const mil = wpick(MIL, [3, 4, 3, 2]);
+    const age = Math.round(mil.a + rnd() * (mil.b - mil.a));
+    const isOpen = rnd() < Math.min(0.85, lab.open * mil.bias);
+    let linger, closedAgo = null;
+    if (isOpen) { linger = age; }
+    else {
+      let d = Math.round(Math.exp(Math.log(lab.med) + gauss() * lab.sig));
+      d = Math.max(1, Math.min(d, age));
+      linger = d; closedAgo = age - d;
+    }
+    out.push({ id: 2400 - i, label: lab, assignee: asg, milestone: mil.n, openedAgo: age, closedAgo, isOpen, linger, title: TITLES[(i * 7 + 3) % TITLES.length] });
+  }
+  return { issues: out, labelDefs: LAB };
+}
+
+/* renderVals — ported from the design component. Given the immutable data
+   and current UI state, produces every value/style the view binds to.
+   `patch` replaces the design's this.setState. */
+function renderVals(data, labelDefs, st, patch) {
+  const showRank = st.panel === 'ranking';
+  const showDist = st.panel === 'dist';
+  const seg = active => ({
+    padding: '7px 13px', borderRadius: '8px', cursor: 'pointer', fontSize: '12.5px', fontWeight: 600,
+    fontFamily: SANS, letterSpacing: '.01em', transition: 'all .15s',
+    border: '1px solid ' + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)),
+    background: active ? rgba(T.primary, 0.14) : rgb(T.canvasSoft),
+    color: active ? rgb(T.primary) : rgb(T.body)
+  });
+  const setS = p => () => patch(p);
+
+  // ── filtering ──
+  const pass = it => (st.status === 'all' || (st.status === 'open' ? it.isOpen : !it.isOpen))
+    && (st.labels.length === 0 || st.labels.includes(it.label.n));
+  const filtered = data.filter(pass);
+  const openArr = filtered.filter(i => i.isOpen);
+  const closedArr = filtered.filter(i => !i.isOpen);
+  const closedDur = closedArr.map(i => i.linger).sort((a, b) => a - b);
+  const avg = closedDur.length ? Math.round(closedDur.reduce((a, b) => a + b, 0) / closedDur.length) : 0;
+  const med = closedDur.length ? Math.round(quantile(closedDur, 0.5)) : 0;
+  const rate = filtered.length ? Math.round(closedArr.length / filtered.length * 100) : 0;
+  const maxOpen = openArr.reduce((m, i) => i.linger > m.linger ? i : m, { linger: -1, title: '—' });
+
+  const metricVals = {
+    openCount: openArr.length, openSub: '全 ' + filtered.length + ' 件中',
+    closedCount: closedArr.length, closeSub: '解決率 ' + rate + '%',
+    avgDays: avg, medDays: med,
+    maxOpenDays: maxOpen.linger < 0 ? 0 : maxOpen.linger,
+    maxOpenSub: maxOpen.linger < 0 ? '—' : trunc(maxOpen.title, 20)
+  };
+
+  // ── ranking (gantt) ──
+  let ranked = filtered.slice();
+  if (st.sort === 'linger') ranked.sort((a, b) => b.linger - a.linger);
+  else if (st.sort === 'recent') ranked.sort((a, b) => a.openedAgo - b.openedAgo);
+  else ranked.sort((a, b) => b.openedAgo - a.openedAgo);
+  const topN = TOP_N;
+  ranked = ranked.slice(0, topN);
+  const rankMax = ranked.reduce((m, i) => Math.max(m, i.linger), 1);
+  const rt = makeTicks(rankMax);
+  const rStepPct = rt.step / rt.niceMax * 100;
+  const rankTicks = rt.ticks.map(v => ({ label: '' + v, style: { position: 'absolute', left: (v / rt.niceMax * 100) + '%', transform: 'translateX(-50%)', top: 0, fontSize: '10px', color: rgb(T.mutedSoft), fontFamily: MONO } }));
+  const rankTrackStyle = { position: 'relative', height: '22px', display: 'flex', alignItems: 'center', backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)', backgroundSize: rStepPct + '% 100%' };
+
+  const bucket = d => d > 90 ? T.err : d > 30 ? T.warn : T.primary;
+  const rows = ranked.map((it, i) => {
+    const c = bucket(it.linger), pct = Math.max(1.5, it.linger / rt.niceMax * 100);
+    const fill = it.isOpen
+      ? { width: pct + '%', height: '12px', borderRadius: '4px', border: '1px solid ' + rgba(c, 0.8), background: 'repeating-linear-gradient(45deg,' + rgba(c, 0.42) + ' 0 5px,' + rgba(c, 0.12) + ' 5px 10px)', transition: 'width .45s cubic-bezier(.4,0,.2,1)', flex: '0 0 auto', boxSizing: 'border-box' }
+      : { width: pct + '%', height: '12px', borderRadius: '4px', background: rgb(c), transition: 'width .45s cubic-bezier(.4,0,.2,1)', flex: '0 0 auto' };
+    return {
+      rankLabel: (i + 1) + '.', labelName: it.label.n, title: it.title,
+      meta: '#' + it.id + ' · ' + it.assignee + ' · ' + it.milestone,
+      chipStyle: { display: 'inline-flex', alignItems: 'center', padding: '1px 8px', borderRadius: '999px', fontSize: '10.5px', fontWeight: 600, fontFamily: MONO, background: rgba(it.label.c, 0.16), color: rgb(it.label.c), border: '1px solid ' + rgba(it.label.c, 0.32), flex: '0 0 auto' },
+      isOpen: it.isOpen,
+      barFillStyle: fill,
+      capStyle: { width: '6px', height: '6px', borderRadius: '50%', background: rgb(c), marginLeft: '6px', flex: '0 0 auto', animation: 'gi-pulse 1.6s ease-in-out infinite' },
+      dayStyle: { marginLeft: '7px', fontFamily: MONO, fontSize: '11px', fontWeight: 600, color: rgb(c), whiteSpace: 'nowrap', flex: '0 0 auto' },
+      dayText: it.isOpen ? it.linger + '日 経過' : it.linger + '日'
+    };
+  });
+
+  // ── box plots ──
+  const gb = st.groupBy;
+  const keyOf = it => gb === 'label' ? it.label.n : gb === 'assignee' ? it.assignee : it.milestone;
+  const palette = ['0 217 146', '108 182 255', '212 167 44', '176 131 240', '255 166 87', '87 171 90', '248 81 73', '139 148 158'];
+  const map = {};
+  data.forEach(it => { const k = keyOf(it); (map[k] = map[k] || []).push(it); });
+  let gi = 0;
+  let groups = Object.keys(map).map(k => {
+    const items = map[k];
+    const closed = items.filter(i => !i.isOpen).map(i => i.linger).sort((a, b) => a - b);
+    const openN = items.filter(i => i.isOpen).length;
+    const col = gb === 'label' ? items[0].label.c : palette[gi++ % palette.length];
+    if (closed.length < 3) return { k, col, empty: true, md: 0 };
+    const q1 = quantile(closed, 0.25), md = quantile(closed, 0.5), q3 = quantile(closed, 0.75);
+    const iqr = q3 - q1, lf = q1 - 1.5 * iqr, uf = q3 + 1.5 * iqr;
+    const inl = closed.filter(v => v >= lf && v <= uf);
+    const wlo = inl.length ? inl[0] : closed[0], whi = inl.length ? inl[inl.length - 1] : closed[closed.length - 1];
+    const outs = closed.filter(v => v < lf || v > uf);
+    return { k, col, empty: false, n: closed.length, openN, q1, md, q3, iqr, min: closed[0], max: closed[closed.length - 1], wlo, whi, outs };
+  }).filter(g => !g.empty).sort((a, b) => b.md - a.md);
+
+  const allClosed = data.filter(i => !i.isOpen).map(i => i.linger).sort((a, b) => a - b);
+  let cap = quantile(allClosed, 0.96);
+  groups.forEach(g => { cap = Math.max(cap, g.whi); });
+  const bt = makeTicks(cap);
+  const boxMax = bt.niceMax, bStepPct = bt.step / boxMax * 100;
+  const boxTicks = bt.ticks.map(v => ({ label: '' + v, style: { position: 'absolute', left: (v / boxMax * 100) + '%', transform: 'translateX(-50%)', top: 0, fontSize: '10px', color: rgb(T.mutedSoft), fontFamily: MONO } }));
+  const P = v => Math.max(0, Math.min(100, v / boxMax * 100));
+  const boxTrackStyle = { position: 'relative', height: '30px', borderRadius: '4px', backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)', backgroundSize: bStepPct + '% 100%' };
+
+  const groupsOut = groups.map(g => ({
+    name: g.k, sub: 'n=' + g.n + ' · 中央 ' + Math.round(g.md) + '日',
+    dotStyle: { width: '9px', height: '9px', borderRadius: '2px', background: rgb(g.col), flex: '0 0 auto' },
+    whiskerStyle: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: P(g.wlo) + '%', width: (P(g.whi) - P(g.wlo)) + '%', height: '1.5px', background: rgba(g.col, 0.7) },
+    capLoStyle: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: P(g.wlo) + '%', width: '1.5px', height: '10px', background: rgba(g.col, 0.7) },
+    capHiStyle: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: P(g.whi) + '%', width: '1.5px', height: '10px', background: rgba(g.col, 0.7) },
+    rectStyle: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: P(g.q1) + '%', width: Math.max(0.8, P(g.q3) - P(g.q1)) + '%', height: '16px', borderRadius: '3px', background: rgba(g.col, 0.22), border: '1px solid ' + rgba(g.col, 0.65), boxSizing: 'border-box' },
+    medianStyle: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: P(g.md) + '%', width: '2.5px', height: '18px', borderRadius: '1px', background: rgb(g.col) },
+    outliers: g.outs.slice(0, 40).map(v => ({ style: { position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)', left: P(v) + '%', width: '5px', height: '5px', borderRadius: '50%', background: rgba(g.col, 0.85) } })),
+    rowStyle: { display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', alignItems: 'center', gap: '12px', padding: '7px 0', borderBottom: '1px solid ' + rgba(T.hairline, 0.5), cursor: 'pointer', background: st.hovered === g.k ? rgba(g.col, 0.06) : 'transparent', transition: 'background .15s' },
+    onEnter: () => patch({ hovered: g.k })
+  }));
+
+  const hg = groups.find(g => g.k === st.hovered) || groups[0] || null;
+  const cellStyle = accent => ({ fontFamily: MONO, fontSize: '14px', fontWeight: 600, marginTop: '3px', color: accent ? rgb(T.primary) : rgb(T.ink) });
+  const hoveredDetail = hg ? {
+    name: hg.k,
+    dotStyle: { width: '10px', height: '10px', borderRadius: '2px', background: rgb(hg.col), flex: '0 0 auto' },
+    cells: [
+      { k: '件数', v: hg.n, vStyle: cellStyle(false) },
+      { k: '未解決', v: hg.openN + '件', vStyle: cellStyle(false) },
+      { k: '最小', v: Math.round(hg.min) + '日', vStyle: cellStyle(false) },
+      { k: 'Q1', v: Math.round(hg.q1) + '日', vStyle: cellStyle(false) },
+      { k: '中央値', v: Math.round(hg.md) + '日', vStyle: cellStyle(true) },
+      { k: 'Q3', v: Math.round(hg.q3) + '日', vStyle: cellStyle(false) },
+      { k: '最大', v: Math.round(hg.max) + '日', vStyle: cellStyle(false) },
+      { k: 'IQR', v: Math.round(hg.iqr) + '日', vStyle: cellStyle(false) },
+      { k: '外れ値', v: hg.outs.length + '件', vStyle: cellStyle(false) }
+    ]
+  } : { name: '—', dotStyle: {}, cells: [] };
+
+  // ── layout ──
+  const gridStyle = { display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: '20px' };
+
+  const chip = active => ({ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: SANS, transition: 'all .15s', border: '1px solid ' + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)), background: active ? rgba(T.primary, 0.12) : rgb(T.canvasSoft), color: active ? rgb(T.ink) : rgb(T.body) });
+  const labelChips = labelDefs.map(l => ({
+    name: l.n,
+    onClick: () => patch(s => ({ labels: s.labels.includes(l.n) ? s.labels.filter(x => x !== l.n) : s.labels.concat(l.n) })),
+    dotStyle: { display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: rgb(l.c), flex: '0 0 auto' },
+    style: chip(st.labels.includes(l.n))
+  }));
+
+  return {
+    repo: 'gitlab.com/acme/web-platform', asOf: '2026-07-01',
+    filterSummary: filtered.length + ' 件 / 全 ' + data.length + ' 件',
+    openCount: metricVals.openCount, openSub: metricVals.openSub,
+    closedCount: metricVals.closedCount, closeSub: metricVals.closeSub,
+    avgDays: metricVals.avgDays, medDays: metricVals.medDays,
+    maxOpenDays: metricVals.maxOpenDays, maxOpenSub: metricVals.maxOpenSub,
+    statusBtns: { all: { style: seg(st.status === 'all'), onClick: setS({ status: 'all' }) }, open: { style: seg(st.status === 'open'), onClick: setS({ status: 'open' }) }, closed: { style: seg(st.status === 'closed'), onClick: setS({ status: 'closed' }) } },
+    sortBtns: { linger: { style: seg(st.sort === 'linger'), onClick: setS({ sort: 'linger' }) }, recent: { style: seg(st.sort === 'recent'), onClick: setS({ sort: 'recent' }) }, oldest: { style: seg(st.sort === 'oldest'), onClick: setS({ sort: 'oldest' }) } },
+    groupBtns: { label: { style: seg(gb === 'label'), onClick: setS({ groupBy: 'label' }) }, assignee: { style: seg(gb === 'assignee'), onClick: setS({ groupBy: 'assignee' }) }, milestone: { style: seg(gb === 'milestone'), onClick: setS({ groupBy: 'milestone' }) } },
+    showRank, showDist,
+    panelTabs: { ranking: { style: seg(st.panel === 'ranking'), onClick: setS({ panel: 'ranking' }) }, dist: { style: seg(st.panel === 'dist'), onClick: setS({ panel: 'dist' }) } },
+    labelChips,
+    clearBtn: { onClick: () => patch({ labels: [] }) },
+    gridStyle,
+    topN,
+    rankTrackStyle, rankTicks, rows, noRows: rows.length === 0,
+    boxTrackStyle, boxTicks, groups: groupsOut, hoveredDetail
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ *  View — faithful JSX translation of the imported template.
+ * ------------------------------------------------------------------ */
+function Dashboard() {
+  const { issues, labelDefs } = useMemo(generate, []);
+  const [st, setSt] = useState({
+    status: 'all', sort: 'linger', labels: [],
+    groupBy: DEFAULT_GROUP_BY, hovered: null, panel: 'ranking'
+  });
+  const patch = (p) => setSt(s => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
+
+  const v = renderVals(issues, labelDefs, st, patch);
+
+  return (
+    <div style={S("min-height:100vh; background:rgb(16 16 16); color:rgb(242 242 242); font-family:'Inter',system-ui,-apple-system,sans-serif; padding:28px 34px 52px; box-sizing:border-box;")}>
+
+      {/* ── Header ── */}
+      <div style={S("display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:22px;")}>
+        <div>
+          <div style={S("display:flex; align-items:center; gap:9px;")}>
+            <div style={S("width:8px; height:8px; border-radius:50%; background:rgb(0 217 146); box-shadow:0 0 10px rgb(0 217 146 / .85);")}></div>
+            <span style={S("font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>GitLab Issue Analytics</span>
+          </div>
+          <h1 style={S("margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;")}>イシュー滞留 &amp; 解決時間ダッシュボード</h1>
+          <div style={S("font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{v.repo} · {v.asOf} 時点</div>
+        </div>
+        <div style={S("text-align:right;")}>
+          <div style={S("font-size:11px; color:rgb(110 118 129); text-transform:uppercase; letter-spacing:.09em; font-weight:600;")}>表示中</div>
+          <div style={S("font-size:13.5px; color:rgb(189 189 189); font-family:'JetBrains Mono',ui-monospace,monospace; margin-top:3px;")}>{v.filterSummary}</div>
+        </div>
+      </div>
+
+      {/* ── Summary metrics ── */}
+      <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px;")}>
+        <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+          <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>Open 件数</div>
+          <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+            <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{v.openCount}</span>
+            <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+          </div>
+          <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.openSub}</div>
+          <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+        </div>
+        <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+          <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>Close 件数</div>
+          <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+            <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(0 217 146);")}>{v.closedCount}</span>
+            <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+          </div>
+          <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.closeSub}</div>
+          <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(0 217 146 / .45);")}></div>
+        </div>
+        <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+          <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>平均 Close 日数</div>
+          <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+            <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);")}>{v.avgDays}</span>
+            <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+          </div>
+          <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>closed issues</div>
+          <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);")}></div>
+        </div>
+        <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+          <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>中央値 Close 日数</div>
+          <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+            <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);")}>{v.medDays}</span>
+            <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+          </div>
+          <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>closed issues</div>
+          <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);")}></div>
+        </div>
+        <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+          <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>最長滞留 (Open)</div>
+          <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+            <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{v.maxOpenDays}</span>
+            <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+          </div>
+          <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.maxOpenSub}</div>
+          <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+        </div>
+      </div>
+
+      {/* ── Filter / sort bar ── */}
+      <div style={S("display:flex; flex-wrap:wrap; align-items:center; gap:14px 24px; padding:13px 16px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:12px; margin-bottom:20px;")}>
+        <div style={S("display:flex; align-items:center; gap:9px;")}>
+          <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>状態</span>
+          <div style={S("display:flex; gap:6px;")}>
+            <button style={v.statusBtns.all.style} onClick={v.statusBtns.all.onClick}>すべて</button>
+            <button style={v.statusBtns.open.style} onClick={v.statusBtns.open.onClick}>Open</button>
+            <button style={v.statusBtns.closed.style} onClick={v.statusBtns.closed.onClick}>Closed</button>
+          </div>
+        </div>
+        <div style={S("display:flex; align-items:center; gap:9px;")}>
+          <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>並べ替え</span>
+          <div style={S("display:flex; gap:6px;")}>
+            <button style={v.sortBtns.linger.style} onClick={v.sortBtns.linger.onClick}>長引き順</button>
+            <button style={v.sortBtns.recent.style} onClick={v.sortBtns.recent.onClick}>新しい順</button>
+            <button style={v.sortBtns.oldest.style} onClick={v.sortBtns.oldest.onClick}>古い順</button>
+          </div>
+        </div>
+        <div style={S("display:flex; align-items:center; gap:9px; flex:1; min-width:260px;")}>
+          <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600; flex:0 0 auto;")}>ラベル</span>
+          <div style={S("display:flex; flex-wrap:wrap; gap:6px;")}>
+            {v.labelChips.map((c, i) => (
+              <button key={i} style={c.style} onClick={c.onClick}><span style={c.dotStyle}></span>{c.name}</button>
+            ))}
+            <button style={S("padding:5px 10px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:600; font-family:'Inter',system-ui,sans-serif; border:1px solid rgb(61 58 57); background:transparent; color:rgb(110 118 129);")} onClick={v.clearBtn.onClick}>クリア</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content tabs ── */}
+      <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;")}>
+        <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>表示</span>
+        <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>滞留ランキング</button>
+        <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
+      </div>
+
+      {/* ── Main grid ── */}
+      <div style={v.gridStyle}>
+
+        {/* Ranking panel */}
+        {v.showRank && (
+          <section style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;")}>
+            <div style={S("display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:3px;")}>
+              <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>滞留期間ランキング</h2>
+              <span style={S("font-size:11.5px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;")}>上位 {v.topN} 件 · 単位 日</span>
+            </div>
+            <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>
+              バーが長いほど Open→Close に時間がかかっている。
+              <span style={{ color: 'rgb(0 217 146)' }}>■</span>{'<30日 '}
+              <span style={{ color: 'rgb(210 153 34)' }}>■</span>30日超{' '}
+              <span style={{ color: 'rgb(248 81 73)' }}>■</span>90日超 · 斜線は Open（未解決）。
+            </p>
+
+            <div style={S("display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+              <div></div>
+              <div style={S("position:relative; height:15px;")}>
+                {v.rankTicks.map((t, i) => (<span key={i} style={t.style}>{t.label}</span>))}
+              </div>
+            </div>
+
+            {v.rows.map((row, i) => (
+              <div key={i} style={S("display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+                <div style={S("min-width:0;")}>
+                  <div style={S("display:flex; align-items:center; gap:7px;")}>
+                    <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:rgb(110 118 129); width:20px; flex:0 0 auto;")}>{row.rankLabel}</span>
+                    <span style={row.chipStyle}>{row.labelName}</span>
+                  </div>
+                  <div style={S("font-size:12.5px; color:rgb(210 210 210); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{row.title}</div>
+                  <div style={S("font-size:10.5px; color:rgb(110 118 129); margin-top:2px; font-family:'JetBrains Mono',ui-monospace,monospace;")}>{row.meta}</div>
+                </div>
+                <div style={v.rankTrackStyle}>
+                  <div style={row.barFillStyle}></div>
+                  {row.isOpen && <span style={row.capStyle}></span>}
+                  <span style={row.dayStyle}>{row.dayText}</span>
+                </div>
+              </div>
+            ))}
+
+            {v.noRows && <div style={S("padding:26px 0; text-align:center; font-size:13px; color:rgb(110 118 129);")}>条件に一致するイシューがありません。</div>}
+          </section>
+        )}
+
+        {/* Box-plot panel */}
+        {v.showDist && (
+          <section style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;")}>
+            <div style={S("display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:3px;")}>
+              <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>Close 日数の分布（箱ひげ）</h2>
+              <div style={S("display:flex; gap:6px;")}>
+                <button style={v.groupBtns.label.style} onClick={v.groupBtns.label.onClick}>ラベル</button>
+                <button style={v.groupBtns.assignee.style} onClick={v.groupBtns.assignee.onClick}>担当者</button>
+                <button style={v.groupBtns.milestone.style} onClick={v.groupBtns.milestone.onClick}>マイルストーン</button>
+              </div>
+            </div>
+            <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。中央値が大きい順。行にホバーで詳細。</p>
+
+            <div style={S("display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+              <div></div>
+              <div style={S("position:relative; height:15px;")}>
+                {v.boxTicks.map((t, i) => (<span key={i} style={t.style}>{t.label}</span>))}
+              </div>
+            </div>
+
+            {v.groups.map((g, i) => (
+              <div key={i} style={g.rowStyle} onMouseEnter={g.onEnter}>
+                <div style={S("min-width:0; display:flex; align-items:center; gap:8px;")}>
+                  <span style={g.dotStyle}></span>
+                  <div style={S("min-width:0;")}>
+                    <div style={S("font-size:12.5px; color:rgb(230 230 230); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{g.name}</div>
+                    <div style={S("font-size:10px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{g.sub}</div>
+                  </div>
+                </div>
+                <div style={v.boxTrackStyle}>
+                  <div style={g.whiskerStyle}></div>
+                  <div style={g.capLoStyle}></div>
+                  <div style={g.capHiStyle}></div>
+                  <div style={g.rectStyle}></div>
+                  <div style={g.medianStyle}></div>
+                  {g.outliers.map((o, j) => (<div key={j} style={o.style}></div>))}
+                </div>
+              </div>
+            ))}
+
+            {/* Hover detail */}
+            <div style={S("margin-top:14px; padding:12px 14px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:10px;")}>
+              <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:11px;")}>
+                <span style={v.hoveredDetail.dotStyle}></span>
+                <span style={S("font-size:13px; font-weight:700; color:rgb(242 242 242);")}>{v.hoveredDetail.name}</span>
+                <span style={S("font-size:10.5px; color:rgb(110 118 129);")}>— 行にホバーで切替</span>
+              </div>
+              <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(66px,1fr)); gap:9px;")}>
+                {v.hoveredDetail.cells.map((cell, i) => (
+                  <div key={i}>
+                    <div style={S("font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:rgb(110 118 129); font-weight:600;")}>{cell.k}</div>
+                    <div style={cell.vStyle}>{cell.v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Dashboard />);
+</script>
+</body>
+</html>

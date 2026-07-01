@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="GitLab イシュー分析ダッシュボード" description="イシューの滞留期間ランキング（ガント風）とラベル/担当者/マイルストーン別の箱ひげ統計。フィルタ・並べ替え・ホバー詳細つき。" -->
+<helmet>
+<script src="./ds-base.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: rgb(16 16 16); }
+  @keyframes gi-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:rgb(16 16 16); color:rgb(242 242 242); font-family:'Inter',system-ui,-apple-system,sans-serif; padding:28px 34px 52px; box-sizing:border-box;">
+
+  <!-- ── Header ── -->
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:22px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:9px;">
+        <div style="width:8px; height:8px; border-radius:50%; background:rgb(0 217 146); box-shadow:0 0 10px rgb(0 217 146 / .85);"></div>
+        <span style="font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">GitLab Issue Analytics</span>
+      </div>
+      <h1 style="margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;">イシュー滞留 &amp; 解決時間ダッシュボード</h1>
+      <div style="font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;">{{ repo }} · {{ asOf }} 時点</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:11px; color:rgb(110 118 129); text-transform:uppercase; letter-spacing:.09em; font-weight:600;">表示中</div>
+      <div style="font-size:13.5px; color:rgb(189 189 189); font-family:'JetBrains Mono',ui-monospace,monospace; margin-top:3px;">{{ filterSummary }}</div>
+    </div>
+  </div>
+
+  <!-- ── Summary metrics ── -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px;">
+    <div style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;">
+      <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">Open 件数</div>
+      <div style="display:flex; align-items:baseline; gap:5px; margin-top:9px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);">{{ openCount }}</span>
+        <span style="font-size:12.5px; color:rgb(139 148 158);">件</span>
+      </div>
+      <div style="margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ openSub }}</div>
+      <div style="height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);"></div>
+    </div>
+    <div style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;">
+      <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">Close 件数</div>
+      <div style="display:flex; align-items:baseline; gap:5px; margin-top:9px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(0 217 146);">{{ closedCount }}</span>
+        <span style="font-size:12.5px; color:rgb(139 148 158);">件</span>
+      </div>
+      <div style="margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ closeSub }}</div>
+      <div style="height:3px; border-radius:2px; margin-top:11px; background:rgb(0 217 146 / .45);"></div>
+    </div>
+    <div style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;">
+      <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">平均 Close 日数</div>
+      <div style="display:flex; align-items:baseline; gap:5px; margin-top:9px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);">{{ avgDays }}</span>
+        <span style="font-size:12.5px; color:rgb(139 148 158);">日</span>
+      </div>
+      <div style="margin-top:7px; font-size:11.5px; color:rgb(110 118 129);">closed issues</div>
+      <div style="height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);"></div>
+    </div>
+    <div style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;">
+      <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">中央値 Close 日数</div>
+      <div style="display:flex; align-items:baseline; gap:5px; margin-top:9px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);">{{ medDays }}</span>
+        <span style="font-size:12.5px; color:rgb(139 148 158);">日</span>
+      </div>
+      <div style="margin-top:7px; font-size:11.5px; color:rgb(110 118 129);">closed issues</div>
+      <div style="height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);"></div>
+    </div>
+    <div style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;">
+      <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;">最長滞留 (Open)</div>
+      <div style="display:flex; align-items:baseline; gap:5px; margin-top:9px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);">{{ maxOpenDays }}</span>
+        <span style="font-size:12.5px; color:rgb(139 148 158);">日</span>
+      </div>
+      <div style="margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ maxOpenSub }}</div>
+      <div style="height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);"></div>
+    </div>
+  </div>
+
+  <!-- ── Filter / sort bar ── -->
+  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:14px 24px; padding:13px 16px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:12px; margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap:9px;">
+      <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;">状態</span>
+      <div style="display:flex; gap:6px;">
+        <button style="{{ statusBtns.all.style }}" onClick="{{ statusBtns.all.onClick }}">すべて</button>
+        <button style="{{ statusBtns.open.style }}" onClick="{{ statusBtns.open.onClick }}">Open</button>
+        <button style="{{ statusBtns.closed.style }}" onClick="{{ statusBtns.closed.onClick }}">Closed</button>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px;">
+      <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;">並べ替え</span>
+      <div style="display:flex; gap:6px;">
+        <button style="{{ sortBtns.linger.style }}" onClick="{{ sortBtns.linger.onClick }}">長引き順</button>
+        <button style="{{ sortBtns.recent.style }}" onClick="{{ sortBtns.recent.onClick }}">新しい順</button>
+        <button style="{{ sortBtns.oldest.style }}" onClick="{{ sortBtns.oldest.onClick }}">古い順</button>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px; flex:1; min-width:260px;">
+      <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600; flex:0 0 auto;">ラベル</span>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <sc-for list="{{ labelChips }}" as="c" hint-placeholder-count="8">
+          <button style="{{ c.style }}" onClick="{{ c.onClick }}"><span style="{{ c.dotStyle }}"></span>{{ c.name }}</button>
+        </sc-for>
+        <button style="padding:5px 10px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:600; font-family:'Inter',system-ui,sans-serif; border:1px solid rgb(61 58 57); background:transparent; color:rgb(110 118 129);" onClick="{{ clearBtn.onClick }}">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Content tabs ── -->
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+    <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;">表示</span>
+    <button style="{{ panelTabs.ranking.style }}" onClick="{{ panelTabs.ranking.onClick }}">滞留ランキング</button>
+    <button style="{{ panelTabs.dist.style }}" onClick="{{ panelTabs.dist.onClick }}">Close日数の分布</button>
+  </div>
+
+  <!-- ── Main grid (layout-switchable) ── -->
+  <div style="{{ gridStyle }}">
+
+    <!-- Ranking panel -->
+    <sc-if value="{{ showRank }}" hint-placeholder-val="{{ true }}">
+    <section style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:3px;">
+        <h2 style="margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);">滞留期間ランキング</h2>
+        <span style="font-size:11.5px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;">上位 {{ topN }} 件 · 単位 日</span>
+      </div>
+      <p style="margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;">バーが長いほど Open→Close に時間がかかっている。<span style="color:rgb(0 217 146);">■</span>&lt;30日 <span style="color:rgb(210 153 34);">■</span>30日超 <span style="color:rgb(248 81 73);">■</span>90日超 · 斜線は Open（未解決）。</p>
+
+      <div style="display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);">
+        <div></div>
+        <div style="position:relative; height:15px;">
+          <sc-for list="{{ rankTicks }}" as="t" hint-placeholder-count="5"><span style="{{ t.style }}">{{ t.label }}</span></sc-for>
+        </div>
+      </div>
+
+      <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
+        <div style="display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);">
+          <div style="min-width:0;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:rgb(110 118 129); width:20px; flex:0 0 auto;">{{ row.rankLabel }}</span>
+              <span style="{{ row.chipStyle }}">{{ row.labelName }}</span>
+            </div>
+            <div style="font-size:12.5px; color:rgb(210 210 210); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.title }}</div>
+            <div style="font-size:10.5px; color:rgb(110 118 129); margin-top:2px; font-family:'JetBrains Mono',ui-monospace,monospace;">{{ row.meta }}</div>
+          </div>
+          <div style="{{ rankTrackStyle }}">
+            <div style="{{ row.barFillStyle }}"></div>
+            <sc-if value="{{ row.isOpen }}" hint-placeholder-val="{{ true }}"><span style="{{ row.capStyle }}"></span></sc-if>
+            <span style="{{ row.dayStyle }}">{{ row.dayText }}</span>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ noRows }}"><div style="padding:26px 0; text-align:center; font-size:13px; color:rgb(110 118 129);">条件に一致するイシューがありません。</div></sc-if>
+    </section>
+    </sc-if>
+
+    <!-- Box-plot panel -->
+    <sc-if value="{{ showDist }}" hint-placeholder-val="{{ true }}">
+    <section style="background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:3px;">
+        <h2 style="margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);">Close 日数の分布（箱ひげ）</h2>
+        <div style="display:flex; gap:6px;">
+          <button style="{{ groupBtns.label.style }}" onClick="{{ groupBtns.label.onClick }}">ラベル</button>
+          <button style="{{ groupBtns.assignee.style }}" onClick="{{ groupBtns.assignee.onClick }}">担当者</button>
+          <button style="{{ groupBtns.milestone.style }}" onClick="{{ groupBtns.milestone.onClick }}">マイルストーン</button>
+        </div>
+      </div>
+      <p style="margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;">箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。中央値が大きい順。行にホバーで詳細。</p>
+
+      <div style="display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid rgb(61 58 57 / .5);">
+        <div></div>
+        <div style="position:relative; height:15px;">
+          <sc-for list="{{ boxTicks }}" as="t" hint-placeholder-count="5"><span style="{{ t.style }}">{{ t.label }}</span></sc-for>
+        </div>
+      </div>
+
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="8">
+        <div style="{{ g.rowStyle }}" onMouseEnter="{{ g.onEnter }}">
+          <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+            <span style="{{ g.dotStyle }}"></span>
+            <div style="min-width:0;">
+              <div style="font-size:12.5px; color:rgb(230 230 230); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.name }}</div>
+              <div style="font-size:10px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;">{{ g.sub }}</div>
+            </div>
+          </div>
+          <div style="{{ boxTrackStyle }}">
+            <div style="{{ g.whiskerStyle }}"></div>
+            <div style="{{ g.capLoStyle }}"></div>
+            <div style="{{ g.capHiStyle }}"></div>
+            <div style="{{ g.rectStyle }}"></div>
+            <div style="{{ g.medianStyle }}"></div>
+            <sc-for list="{{ g.outliers }}" as="o" hint-placeholder-count="0"><div style="{{ o.style }}"></div></sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <!-- Hover detail -->
+      <div style="margin-top:14px; padding:12px 14px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:11px;">
+          <span style="{{ hoveredDetail.dotStyle }}"></span>
+          <span style="font-size:13px; font-weight:700; color:rgb(242 242 242);">{{ hoveredDetail.name }}</span>
+          <span style="font-size:10.5px; color:rgb(110 118 129);">— 行にホバーで切替</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(66px,1fr)); gap:9px;">
+          <sc-for list="{{ hoveredDetail.cells }}" as="cell" hint-placeholder-count="9">
+            <div>
+              <div style="font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:rgb(110 118 129); font-weight:600;">{{ cell.k }}</div>
+              <div style="{{ cell.vStyle }}">{{ cell.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<!--
+  The original design ships a <script type="text/x-dc" data-dc-script> block holding
+  a `class Component extends DCLogic`. That logic is ported verbatim into ../index.html
+  (the runnable implementation). See index.html for the executable version.
+-->
+</body>
+</html>
