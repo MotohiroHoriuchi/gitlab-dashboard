@@ -9,6 +9,8 @@ import {
   issueFilterLabels,
   issueInterval,
   renderVals,
+  scheduleSummary,
+  scheduleVariance,
   windowFor,
   type Patch,
 } from "./logic";
@@ -116,10 +118,110 @@ describe("issueInterval", () => {
     const it = mkIssue({ startDate: "2026-06-15", createdAt: "2026-06-01", dueDate: "2026-06-30" });
     expect(issueInterval(it, TODAY).startDay).toBe(dayIndex("2026-06-15"));
   });
-  it("guards due-before-start (collapses to a single day)", () => {
-    const it = mkIssue({ createdAt: "2026-06-20", dueDate: "2026-06-10" });
+  it("extends an open, past-due bar to today (so the overrun is visible)", () => {
+    const it = mkIssue({ isOpen: true, createdAt: "2026-06-20", dueDate: "2026-06-25" });
+    expect(issueInterval(it, TODAY).endDay).toBe(TODAY); // due 06-25 < today 07-01
+  });
+  it("leaves a future due date as the (planned) open bar end", () => {
+    const it = mkIssue({ isOpen: true, createdAt: "2026-06-20", dueDate: "2026-07-10" });
+    expect(issueInterval(it, TODAY).endDay).toBe(dayIndex("2026-07-10"));
+  });
+  it("guards end-before-start (collapses to a single day)", () => {
+    // closed with a close date before the start -> clamped to the start day
+    const it = mkIssue({
+      isOpen: false,
+      startDate: "2026-06-20",
+      createdAt: "2026-06-20",
+      closedAt: "2026-06-10",
+    });
     const iv = issueInterval(it, TODAY);
     expect(iv.endDay).toBe(iv.startDay);
+  });
+});
+
+describe("scheduleVariance", () => {
+  it("returns none when there is no due date", () => {
+    expect(scheduleVariance(mkIssue({ dueDate: null }), TODAY).status).toBe("none");
+  });
+  it("closed before due -> onTimeClosed with an early-days label", () => {
+    const v = scheduleVariance(
+      mkIssue({ isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-18" }),
+      TODAY,
+    );
+    expect(v.status).toBe("onTimeClosed");
+    expect(v.tone).toBe("ok");
+    expect(v.days).toBe(2);
+    expect(v.label).toBe("2日前倒し");
+  });
+  it("closed exactly on due -> onTimeClosed '期限どおり'", () => {
+    const v = scheduleVariance(
+      mkIssue({ isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-20" }),
+      TODAY,
+    );
+    expect(v.status).toBe("onTimeClosed");
+    expect(v.days).toBe(0);
+    expect(v.label).toBe("期限どおり");
+  });
+  it("closed after due -> lateClosed with day count", () => {
+    const v = scheduleVariance(
+      mkIssue({ isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-23" }),
+      TODAY,
+    );
+    expect(v.status).toBe("lateClosed");
+    expect(v.tone).toBe("err");
+    expect(v.days).toBe(3);
+    expect(v.label).toBe("3日遅延");
+  });
+  it("open past due -> overdueOpen measured against today", () => {
+    const v = scheduleVariance(mkIssue({ isOpen: true, dueDate: "2026-06-26" }), TODAY);
+    expect(v.status).toBe("overdueOpen");
+    expect(v.tone).toBe("warn");
+    expect(v.days).toBe(5); // 06-26 -> 07-01
+    expect(v.label).toBe("5日超過（進行中）");
+  });
+  it("open due today -> onTimeOpen '本日期限'", () => {
+    const v = scheduleVariance(mkIssue({ isOpen: true, dueDate: "2026-07-01" }), TODAY);
+    expect(v.status).toBe("onTimeOpen");
+    expect(v.label).toBe("本日期限");
+  });
+  it("open due in the future -> onTimeOpen with remaining days", () => {
+    const v = scheduleVariance(mkIssue({ isOpen: true, dueDate: "2026-07-04" }), TODAY);
+    expect(v.status).toBe("onTimeOpen");
+    expect(v.days).toBe(3);
+    expect(v.label).toBe("残3日");
+  });
+  it("falls back to the today-based branch when closed lacks a close date", () => {
+    const v = scheduleVariance(
+      mkIssue({ isOpen: false, closedAt: null, dueDate: "2026-06-26" }),
+      TODAY,
+    );
+    expect(v.status).toBe("overdueOpen");
+  });
+});
+
+describe("scheduleSummary", () => {
+  it("rate counts only closed-with-due; open issues are excluded from the denominator", () => {
+    const s = scheduleSummary(
+      [
+        mkIssue({ id: 1, isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-18" }), // onTime
+        mkIssue({ id: 2, isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-24" }), // late +4
+        mkIssue({ id: 3, isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-26" }), // late +6
+        mkIssue({ id: 4, isOpen: true, dueDate: "2026-06-25" }), // overdue (open) - excluded from rate
+        mkIssue({ id: 5, isOpen: true, dueDate: null }), // no due - ignored entirely
+      ],
+      TODAY,
+    );
+    expect(s.closedWithDue).toBe(3);
+    expect(s.onTime).toBe(1);
+    expect(s.late).toBe(2);
+    expect(s.overdue).toBe(1);
+    expect(s.adherenceRate).toBe(33); // 1/3
+    expect(s.avgLateDays).toBe(5); // (4 + 6) / 2
+  });
+  it("returns null rate/avg when there is nothing to measure", () => {
+    const s = scheduleSummary([mkIssue({ isOpen: true, dueDate: null })], TODAY);
+    expect(s.adherenceRate).toBeNull();
+    expect(s.avgLateDays).toBeNull();
   });
 });
 
@@ -202,6 +304,48 @@ describe("buildCalendar", () => {
     expect(seg.tip!.title).toBe("#42 認証");
     expect(seg.tip!.labelName).toBe("backend");
     expect(seg.tip!.rows.map((r) => r.k)).toContain("担当者");
+  });
+
+  it("draws an overrun hatch + due tick and a 予実 tooltip row for a late-closed issue", () => {
+    const iss = mkIssue({
+      id: 77,
+      createdAt: "2026-07-06",
+      dueDate: "2026-07-08",
+      closedAt: "2026-07-12",
+      isOpen: false,
+    });
+    const cal = buildCalendar([iss], [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const segs = cal.weeks.flatMap((w) => w.segments).filter((s) => s.id === 77);
+    expect(segs.some((s) => s.kind === "overrun")).toBe(true);
+    expect(segs.some((s) => s.kind === "duetick")).toBe(true);
+    const bar = segs.find((s) => s.kind === "bar")!;
+    const vRow = bar.tip!.rows.find((r) => r.k === "予実")!;
+    expect(vRow.v).toBe("4日遅延");
+    expect(vRow.tone).toBe("err");
+  });
+
+  it("emits no overrun for an on-time (future-due) open issue", () => {
+    const iss = mkIssue({ id: 78, createdAt: "2026-07-06", dueDate: "2026-07-19", isOpen: true });
+    const cal = buildCalendar([iss], [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const segs = cal.weeks.flatMap((w) => w.segments).filter((s) => s.id === 78);
+    expect(segs.some((s) => s.kind === "overrun" || s.kind === "duetick")).toBe(false);
+  });
+
+  it("exposes schedule-summary KPIs over the issue set", () => {
+    const cal = buildCalendar(
+      [
+        mkIssue({ id: 1, isOpen: false, dueDate: "2026-07-08", closedAt: "2026-07-07" }),
+        mkIssue({ id: 2, isOpen: false, dueDate: "2026-07-08", closedAt: "2026-07-12" }),
+      ],
+      [],
+      twoWeekState(anchorMon),
+      noop,
+      TODAY,
+      "checkpoint",
+    );
+    expect(cal.summary.closedWithDue).toBe(2);
+    expect(cal.summary.onTime).toBe(1);
+    expect(cal.summary.late).toBe(1);
   });
 
   it("caps issue lanes at 3 in month mode and emits a per-day '+N 件' chip", () => {

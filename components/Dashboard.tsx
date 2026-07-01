@@ -83,6 +83,7 @@ export default function Dashboard() {
     milestones: data.milestones,
     checkpointLabel: data.checkpointLabel,
   });
+  const cs = v.calendar.summary; // 納期予実 KPIs (calendar metric cards)
 
   return (
     <div
@@ -285,9 +286,40 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Calendar tab: milestone/issue timeline (filter-dependent for issues) */}
+        {/* Calendar tab: schedule-variance metrics + milestone/issue timeline (filter-dependent) */}
         {v.showCal && (
           <>
+            {/* Schedule-variance metrics (納期予実) — mirrors the ranking summary cards */}
+            <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;")}>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>納期遵守率</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(16 185 129);")}>{cs.adherenceRate ?? "—"}</span>
+                  {cs.adherenceRate !== null && <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>%</span>}
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>期限内 {cs.onTime} ／ 完了&期限あり {cs.closedWithDue} 件</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(16 185 129 / .45);")}></div>
+              </div>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>遅延完了</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{cs.late}</span>
+                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{cs.avgLateDays !== null ? `平均 +${cs.avgLateDays} 日遅れ` : "遅延なし"}</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+              </div>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>期限超過（進行中）</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{cs.overdue}</span>
+                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>予定日を過ぎた未完了</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+              </div>
+            </div>
+
             <FilterControls v={v} st={st} showSort={false} />
             <CalendarView cal={v.calendar} />
           </>

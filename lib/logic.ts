@@ -223,7 +223,7 @@ export interface CalTip {
   title: string; // "#101 API設計" (issue) or the milestone title
   labelName: string | null; // label chip text for issues; null for milestones
   color: string; // "R G B"
-  rows: { k: string; v: string }[]; // 担当者 / 状態 / 期間 …
+  rows: { k: string; v: string; tone?: VarianceTone }[]; // 担当者 / 状態 / 期間 / 期限 / 予実
 }
 /** One row in a day-overflow popover: every item covering that day (bars beyond
  *  the lane cap are otherwise hidden). */
@@ -238,6 +238,8 @@ export interface CalDayItem {
   statusLabel: string; // 進行中 | 完了 | マイルストーン
   rangeLabel: string; // "7/6 – 7/13" (or single "7/8")
   isCheckpoint: boolean;
+  varianceLabel: string; // schedule variance ("" when not measurable)
+  varianceTone: VarianceTone;
 }
 /** One clipped bar piece within a single week row. A bar crossing a week
  *  boundary yields one segment per row (isStart/isEnd flag the true ends).
@@ -245,7 +247,7 @@ export interface CalDayItem {
  *  lane cap (carries the day's full item list for the click-through popover). */
 export interface CalSegment {
   key: string;
-  kind: "bar" | "overflow";
+  kind: "bar" | "overflow" | "overrun" | "duetick";
   track: "milestone" | "issue";
   id: number;
   label: string; // rendered only when showLabel
@@ -293,6 +295,7 @@ export interface CalVals {
   laneHeight: number;
   empty: boolean;
   legend: { checkpointLabel: string };
+  summary: ScheduleSummary; // 納期予実 KPIs over the filtered issue set
 }
 
 export interface Vals {
@@ -891,6 +894,8 @@ interface CalItem {
   isCheckpoint: boolean;
   meta: string;
   lane: number;
+  variance: ScheduleVariance; // milestones: NO_VARIANCE
+  dueDay: number | null; // due_date day-index (overrun hatch/tick); null if none
 }
 
 const fmtMD = (idx: number): string => {
@@ -912,10 +917,13 @@ function itemStatus(it: CalItem): { status: "open" | "closed" | "milestone"; lab
 /** Rich hover tooltip for a bar. */
 function buildTip(it: CalItem): CalTip {
   const st = itemStatus(it);
-  const rows: { k: string; v: string }[] = [];
+  const rows: { k: string; v: string; tone?: VarianceTone }[] = [];
   if (it.track === "issue") rows.push({ k: "担当者", v: it.assignee || "—" });
   rows.push({ k: "状態", v: st.label });
   rows.push({ k: "期間", v: calRange(it.startDay, it.endDay) });
+  if (it.track === "issue" && it.dueDay !== null) rows.push({ k: "期限", v: fmtMD(it.dueDay) });
+  if (it.variance.status !== "none")
+    rows.push({ k: "予実", v: it.variance.label, tone: it.variance.tone });
   return {
     title: it.track === "issue" ? `#${it.id} ${it.label}` : it.label,
     labelName: it.track === "issue" ? it.labelName : null,
@@ -938,6 +946,8 @@ function toDayItem(it: CalItem): CalDayItem {
     statusLabel: st.label,
     rangeLabel: calRange(it.startDay, it.endDay),
     isCheckpoint: it.isCheckpoint,
+    varianceLabel: it.variance.label,
+    varianceTone: it.variance.tone,
   };
 }
 
@@ -968,16 +978,104 @@ function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
 }
 
 /** Issue -> inclusive [startDay, endDay] day-index interval.
- *  start = start_date || created_at; end = closed_at (if closed) || due_date || today.
+ *  start = start_date || created_at.
+ *  end   = closed_at (if closed) || due_date, except an *open, past-due* issue
+ *          extends to today so its [due..today] schedule overrun is drawn.
  *  Exported for unit tests. */
 export function issueInterval(it: Issue, todayIndex: number): { startDay: number; endDay: number } {
   const startDay = it.startDate ? dayIndex(it.startDate) : dayIndex(it.createdAt);
   let endDay: number;
   if (!it.isOpen && it.closedAt) endDay = dayIndex(it.closedAt);
-  else if (it.dueDate) endDay = dayIndex(it.dueDate);
-  else endDay = todayIndex;
+  else if (it.dueDate) {
+    // Open & overdue bars run to today so the overrun is visible; a future due
+    // date still ends the (planned) bar at the due date.
+    const due = dayIndex(it.dueDate);
+    endDay = it.isOpen && !Number.isNaN(due) ? Math.max(due, todayIndex) : due;
+  } else endDay = todayIndex;
   if (Number.isNaN(endDay)) endDay = startDay;
   return { startDay, endDay: Math.max(endDay, startDay) };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Schedule variance (納期予実) — plan (due_date) vs actual (closed_at)
+ * ------------------------------------------------------------------ */
+export type VarianceStatus =
+  | "none" // no due date -> not measurable
+  | "onTimeClosed" // closed on/before due (0 = on time, else early)
+  | "lateClosed" // closed after due
+  | "onTimeOpen" // open, due today or later
+  | "overdueOpen"; // open, past due
+export type VarianceTone = "neutral" | "ok" | "warn" | "err";
+
+/** Plan-vs-actual result for one issue. `days` is a non-negative magnitude
+ *  (early / late / remaining / overrun days); `label` is the display string. */
+export interface ScheduleVariance {
+  status: VarianceStatus;
+  days: number;
+  label: string;
+  tone: VarianceTone;
+}
+export const NO_VARIANCE: ScheduleVariance = { status: "none", days: 0, label: "", tone: "neutral" };
+
+/** VarianceTone -> "R G B" theme token (for both bars and tooltip values). */
+export const toneColor = (t: VarianceTone): string =>
+  t === "ok" ? T.ok : t === "err" ? T.err : t === "warn" ? T.warn : T.body;
+
+/** Classify an issue's schedule adherence: due_date (plan) vs closed_at
+ *  (actual, closed) or today (still open). Exported for unit tests. */
+export function scheduleVariance(it: Issue, todayIndex: number): ScheduleVariance {
+  if (!it.dueDate) return NO_VARIANCE;
+  const dueDay = dayIndex(it.dueDate);
+  if (Number.isNaN(dueDay)) return NO_VARIANCE;
+  if (!it.isOpen && it.closedAt) {
+    const delta = dayIndex(it.closedAt) - dueDay;
+    if (delta <= 0)
+      return { status: "onTimeClosed", days: Math.abs(delta), tone: "ok", label: delta === 0 ? "期限どおり" : `${-delta}日前倒し` };
+    return { status: "lateClosed", days: delta, tone: "err", label: `${delta}日遅延` };
+  }
+  // open (or the abnormal closed-without-closedAt case): measure against today
+  const delta = todayIndex - dueDay;
+  if (delta > 0) return { status: "overdueOpen", days: delta, tone: "warn", label: `${delta}日超過（進行中）` };
+  return { status: "onTimeOpen", days: Math.abs(delta), tone: "neutral", label: delta === 0 ? "本日期限" : `残${-delta}日` };
+}
+
+/** Portfolio-level schedule KPIs over a set of issues (adherence excludes
+ *  open issues; only closed-with-due count toward the rate). */
+export interface ScheduleSummary {
+  closedWithDue: number; // rate denominator
+  onTime: number;
+  late: number;
+  overdue: number; // open & past due
+  adherenceRate: number | null; // onTime / closedWithDue (percent); null if denom 0
+  avgLateDays: number | null; // mean overrun of late-closed; null if none
+}
+export function scheduleSummary(issues: Issue[], todayIndex: number): ScheduleSummary {
+  let closedWithDue = 0,
+    onTime = 0,
+    late = 0,
+    overdue = 0,
+    lateSum = 0;
+  for (const it of issues) {
+    const v = scheduleVariance(it, todayIndex);
+    if (v.status === "onTimeClosed") {
+      closedWithDue++;
+      onTime++;
+    } else if (v.status === "lateClosed") {
+      closedWithDue++;
+      late++;
+      lateSum += v.days;
+    } else if (v.status === "overdueOpen") {
+      overdue++;
+    }
+  }
+  return {
+    closedWithDue,
+    onTime,
+    late,
+    overdue,
+    adherenceRate: closedWithDue ? Math.round((onTime / closedWithDue) * 100) : null,
+    avgLateDays: late ? Math.round((lateSum / late) * 10) / 10 : null,
+  };
 }
 
 /** Precomputed bar style. Left/right corners round only on the true start/end
@@ -1040,6 +1138,46 @@ function barStyle(
   return s;
 }
 
+/** Red hatched overlay for a schedule overrun `[due+1 .. end]`, layered on the
+ *  base bar's own lane row. `roundRight` only on the row holding the true end. */
+function overrunStyle(
+  colStart: number,
+  colSpan: number,
+  gridRowStart: number,
+  roundRight: boolean,
+): CSSProperties {
+  return {
+    gridColumn: `${colStart + 1} / span ${colSpan}`,
+    gridRow: String(gridRowStart),
+    alignSelf: "center",
+    height: "16px",
+    boxSizing: "border-box",
+    borderRadius: roundRight ? "0 5px 5px 0" : "0",
+    background:
+      "repeating-linear-gradient(45deg," +
+      rgba(T.err, 0.85) +
+      " 0 5px," +
+      rgba(T.err, 0.4) +
+      " 5px 10px)",
+    border: "1px solid " + rgba(T.err, 0.9),
+    borderLeft: "none",
+    pointerEvents: "none",
+  };
+}
+
+/** Thin "予定線" tick at the plan/actual boundary (right edge of the due day). */
+function dueTickStyle(colStart: number, gridRowStart: number): CSSProperties {
+  return {
+    gridColumn: `${colStart + 1} / span 1`,
+    gridRow: String(gridRowStart),
+    alignSelf: "center",
+    height: "18px",
+    boxSizing: "border-box",
+    borderRight: "2px solid " + rgb(T.ink),
+    pointerEvents: "none",
+  };
+}
+
 /** Issues (already pass()-filtered) + milestones -> the calendar view model. */
 export function buildCalendar(
   issues: Issue[],
@@ -1077,6 +1215,8 @@ export function buildCalendar(
       isCheckpoint: false,
       meta: `${m.title} · ${m.startDate ?? "?"} → ${m.dueDate ?? "?"}`,
       lane: 0,
+      variance: NO_VARIANCE,
+      dueDay: null,
     });
   }
 
@@ -1098,6 +1238,8 @@ export function buildCalendar(
       isCheckpoint: it.isCheckpoint,
       meta: `#${it.id} ${it.title} · ${it.assignee}`,
       lane: 0,
+      variance: scheduleVariance(it, todayIndex),
+      dueDay: it.dueDate ? dayIndex(it.dueDate) : null,
     });
   }
 
@@ -1199,6 +1341,46 @@ export function buildCalendar(
         };
       }
       segments.push(s);
+
+      // Schedule overrun (納期予実): a red hatch over [due+1 .. end] plus a plan
+      // tick at the due boundary. Only late-closed / overdue-open have overrun;
+      // both are layered on the same lane row, above the base bar just pushed.
+      const vStatus = it.variance.status;
+      if (it.dueDay !== null && (vStatus === "lateClosed" || vStatus === "overdueOpen")) {
+        const os = Math.max(it.dueDay + 1, it.startDay, rowStart);
+        const oe = Math.min(it.endDay, rowEnd);
+        if (oe >= os) {
+          segments.push({
+            key: `${it.track}-${it.id}-overrun-r${r}`,
+            kind: "overrun",
+            track: it.track,
+            id: it.id,
+            label: "",
+            showLabel: false,
+            meta: "",
+            colStart: os - rowStart,
+            colSpan: oe - os + 1,
+            gridRowStart,
+            style: overrunStyle(os - rowStart, oe - os + 1, gridRowStart, it.endDay <= rowEnd),
+          });
+        }
+        if (it.dueDay >= it.startDay && it.dueDay >= rowStart && it.dueDay <= rowEnd) {
+          const tCol = it.dueDay - rowStart;
+          segments.push({
+            key: `${it.track}-${it.id}-duetick-r${r}`,
+            kind: "duetick",
+            track: it.track,
+            id: it.id,
+            label: "",
+            showLabel: false,
+            meta: "",
+            colStart: tCol,
+            colSpan: 1,
+            gridRowStart,
+            style: dueTickStyle(tCol, gridRowStart),
+          });
+        }
+      }
     };
     // Milestones + checkpoints always shown; regular issue bars up to the cap.
     for (const it of mItems) emit(it, 0);
@@ -1311,5 +1493,6 @@ export function buildCalendar(
     laneHeight,
     empty: mItems.length === 0 && iItems.length === 0,
     legend: { checkpointLabel },
+    summary: scheduleSummary(issues, todayIndex),
   };
 }

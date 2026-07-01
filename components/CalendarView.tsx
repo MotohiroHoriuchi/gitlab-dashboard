@@ -8,6 +8,7 @@ import {
   T,
   rgb,
   rgba,
+  toneColor,
   type CalDayItem,
   type CalSegment,
   type CalTip,
@@ -180,6 +181,9 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
                 >
                   {s.overflowLabel} ▾
                 </div>
+              ) : s.kind === "overrun" || s.kind === "duetick" ? (
+                // schedule-overrun hatch / plan tick — non-interactive overlay
+                <div key={segKey(s.key)} style={{ ...s.style, ...dimAnim }} />
               ) : (
                 <div
                   key={segKey(s.key)}
@@ -272,7 +276,9 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
         {tip.rows.map((r, i) => (
           <div key={i} style={{ display: "contents" }}>
             <span style={{ fontSize: "10.5px", color: rgb(T.mutedSoft) }}>{r.k}</span>
-            <span style={{ fontSize: "11px", color: rgb(T.body) }}>{r.v}</span>
+            <span style={{ fontSize: "11px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
+              {r.v}
+            </span>
           </div>
         ))}
       </div>
@@ -350,6 +356,12 @@ function DayPopover({
               <div style={{ marginTop: "2px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
                 <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
                 {metaRest(it) && <span> · {metaRest(it)}</span>}
+                {it.varianceLabel && (
+                  <span style={{ color: rgb(toneColor(it.varianceTone)), fontWeight: 600 }}>
+                    {" · "}
+                    {it.varianceLabel}
+                  </span>
+                )}
               </div>
             </div>
           </div>
