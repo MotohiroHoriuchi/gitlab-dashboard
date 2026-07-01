@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   mapIssue,
+  mapMilestone,
   pickLabel,
+  labelNamesOf,
   hexToRgbTriple,
   getConfig,
   ConfigError,
@@ -64,6 +66,12 @@ describe("mapIssue", () => {
       assignee: "佐藤 玲",
       milestone: "v1.5",
       label: { name: "tech-debt", color: "212 167 44" },
+      createdAt: raw.created_at,
+      closedAt: null,
+      dueDate: null,
+      startDate: null,
+      labelNames: ["tech-debt"],
+      isCheckpoint: false,
     });
   });
 
@@ -86,6 +94,101 @@ describe("mapIssue", () => {
     expect(m.closedAgo).toBe(40);
     expect(m.assignee).toBe("田中 健"); // falls back to deprecated single assignee
     expect(m.milestone).toBe("Backlog"); // null milestone
+    expect(m.closedAt).toBe(raw.closed_at); // absolute close date retained
+    expect(m.dueDate).toBeNull();
+    expect(m.isCheckpoint).toBe(false);
+  });
+
+  it("detects the checkpoint label even when it is NOT the representative (first) label", () => {
+    const raw: GitLabIssue = {
+      iid: 1,
+      title: "gate",
+      state: "opened",
+      created_at: daysAgo(5),
+      closed_at: null,
+      due_date: "2026-08-01",
+      labels: [
+        { name: "bug", color: "#f85149" },
+        { name: "checkpoint", color: "#cccccc" },
+      ],
+    };
+    const m = mapIssue(raw, NOW);
+    expect(m.isCheckpoint).toBe(true);
+    expect(m.labelNames).toEqual(["bug", "checkpoint"]);
+    expect(m.dueDate).toBe("2026-08-01");
+    expect(m.startDate).toBeNull();
+    expect(m.label.name).toBe("bug"); // representative label is still the first
+  });
+
+  it("derives startDate from the iteration when the issue has no own start_date", () => {
+    const raw: GitLabIssue = {
+      iid: 3,
+      title: "sprint task",
+      state: "opened",
+      created_at: daysAgo(10),
+      closed_at: null,
+      iteration: { start_date: "2026-07-06", due_date: "2026-07-19", title: null },
+    };
+    expect(mapIssue(raw, NOW).startDate).toBe("2026-07-06");
+  });
+
+  it("prefers the issue's own start_date over the iteration's", () => {
+    const raw: GitLabIssue = {
+      iid: 4,
+      title: "has own start",
+      state: "opened",
+      created_at: daysAgo(10),
+      closed_at: null,
+      start_date: "2026-07-02",
+      iteration: { start_date: "2026-07-06" },
+    };
+    expect(mapIssue(raw, NOW).startDate).toBe("2026-07-02");
+  });
+
+  it("startDate is null when neither start_date nor iteration is present", () => {
+    const raw: GitLabIssue = {
+      iid: 5,
+      title: "no start",
+      state: "opened",
+      created_at: daysAgo(10),
+      closed_at: null,
+    };
+    expect(mapIssue(raw, NOW).startDate).toBeNull();
+  });
+
+  it("checkpoint match is case-insensitive and label name is configurable", () => {
+    const raw: GitLabIssue = {
+      iid: 2,
+      title: "x",
+      state: "opened",
+      created_at: daysAgo(1),
+      closed_at: null,
+      labels: [{ name: "CheckPoint" }],
+    };
+    expect(mapIssue(raw, NOW).isCheckpoint).toBe(true); // default "checkpoint", case-insensitive
+    const jp: GitLabIssue = { ...raw, labels: [{ name: "期限" }] };
+    expect(mapIssue(jp, NOW, "期限").isCheckpoint).toBe(true);
+    expect(mapIssue(jp, NOW).isCheckpoint).toBe(false); // "期限" != default "checkpoint"
+  });
+});
+
+describe("labelNamesOf", () => {
+  it("collects every label name (object or string), dropping empties", () => {
+    expect(labelNamesOf([{ name: "a" }, "b", { name: "" }, { color: "#fff" }])).toEqual(["a", "b"]);
+    expect(labelNamesOf(undefined)).toEqual([]);
+  });
+});
+
+describe("mapMilestone", () => {
+  it("maps start/due dates through", () => {
+    expect(
+      mapMilestone({ id: 3, title: "v2", start_date: "2026-07-01", due_date: "2026-08-15", state: "active" }),
+    ).toEqual({ id: 3, title: "v2", startDate: "2026-07-01", dueDate: "2026-08-15", state: "active" });
+  });
+  it("passes null dates through", () => {
+    expect(
+      mapMilestone({ id: 4, title: "nodate", start_date: null, due_date: null, state: "closed" }),
+    ).toEqual({ id: 4, title: "nodate", startDate: null, dueDate: null, state: "closed" });
   });
 
   it("closed without closed_at falls back to linger = openedAgo", () => {
@@ -127,6 +230,16 @@ describe("getConfig", () => {
       projectId: "acme/web",
       token: "glpat-x",
       maxIssues: 2000,
+      checkpointLabel: "checkpoint", // default
     });
+  });
+  it("reads the CHECKPOINT_LABEL override", () => {
+    const cfg = getConfig({
+      GITLAB_BASE_URL: "https://gitlab.com",
+      GITLAB_PROJECT_ID: "1",
+      GITLAB_TOKEN: "glpat-x",
+      CHECKPOINT_LABEL: "gate",
+    });
+    expect(cfg.checkpointLabel).toBe("gate");
   });
 });

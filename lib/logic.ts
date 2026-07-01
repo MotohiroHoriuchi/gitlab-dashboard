@@ -4,7 +4,7 @@
 // every value/style the view binds to. No framework coupling beyond CSSProperties.
 
 import type { CSSProperties } from "react";
-import type { DashState, Issue, LabelDef } from "./types";
+import type { CalMode, DashState, Issue, LabelDef, Milestone } from "./types";
 
 /* ------------------------------------------------------------------ *
  *  Config (were `$props` on the design component)
@@ -61,6 +61,76 @@ export function S(css: string): CSSProperties {
   }
   if (typeof o.fontFamily === "string") o.fontFamily = mapFont(o.fontFamily);
   return o as CSSProperties;
+}
+
+/* Segmented-control button style — shared by the panel tabs, the status/sort/
+ * group toggles, and the calendar mode/nav buttons. (Lifted out of renderVals
+ * so buildCalendar can reuse it.) */
+export const seg = (active: boolean): CSSProperties => ({
+  padding: "7px 13px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontSize: "12.5px",
+  fontWeight: 600,
+  fontFamily: SANS,
+  letterSpacing: ".01em",
+  transition: "all .15s",
+  border: "1px solid " + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)),
+  background: active ? rgba(T.primary, 0.14) : rgb(T.canvasSoft),
+  color: active ? rgb(T.primary) : rgb(T.body),
+});
+
+/* ------------------------------------------------------------------ *
+ *  Calendar / timeline date math. Everything is a UTC integer day-index
+ *  (floor(ms/DAY)) so positioning is pure integer arithmetic and immune to
+ *  DST / local-midnight drift (and matches the server's UTC `asOf`).
+ * ------------------------------------------------------------------ */
+export const DAY = 86_400_000;
+export const WEEK_START = 1; // 0=Sun .. 1=Mon. One-line locale switch.
+
+/** ISO string -> UTC day-index. Bare "YYYY-MM-DD" parses as UTC midnight. */
+export const dayIndex = (iso: string): number => Math.floor(Date.parse(iso) / DAY);
+/** Day-of-week for a day-index, Sun=0..Sat=6 (1970-01-01 = Thursday = idx 0). */
+export const dowOf = (idx: number): number => (((idx + 4) % 7) + 7) % 7;
+/** Column 0..6 within a week that begins on WEEK_START. */
+export const colOf = (idx: number): number => (dowOf(idx) - WEEK_START + 7) % 7;
+export const weekStartOnOrBefore = (idx: number): number => idx - colOf(idx);
+
+/** Visible window for a mode+anchor: the first week's start day-index and how
+ *  many 7-day rows to draw (month = 4–6 whole weeks; twoweek = 2). */
+export function windowFor(mode: CalMode, anchor: number): { weekStart: number; weeks: number } {
+  if (mode === "twoweek") return { weekStart: weekStartOnOrBefore(anchor), weeks: 2 };
+  const d = new Date(anchor * DAY);
+  const firstIdx = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / DAY);
+  const lastIdx = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0) / DAY);
+  const weekStart = weekStartOnOrBefore(firstIdx);
+  const weekEnd = weekStartOnOrBefore(lastIdx) + 6;
+  return { weekStart, weeks: Math.round((weekEnd - weekStart + 1) / 7) };
+}
+
+/** Greedy interval-partition into lanes: mutates each item's `lane` and returns
+ *  the lane count. Items touching on the same day still collide (strict `>`). */
+export function assignLanes<T extends { startDay: number; endDay: number; lane: number }>(
+  items: T[],
+): number {
+  const sorted = items.slice().sort((a, b) => a.startDay - b.startDay || b.endDay - a.endDay);
+  const laneEnd: number[] = [];
+  for (const it of sorted) {
+    let placed = false;
+    for (let L = 0; L < laneEnd.length; L++) {
+      if (it.startDay > laneEnd[L]) {
+        laneEnd[L] = it.endDay;
+        it.lane = L;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      it.lane = laneEnd.length;
+      laneEnd.push(it.endDay);
+    }
+  }
+  return laneEnd.length;
 }
 
 /* ------------------------------------------------------------------ *
@@ -144,6 +214,87 @@ interface HoveredDetail {
   dotStyle: CSSProperties;
   cells: Cell[];
 }
+
+/* ── calendar view-model ── */
+/** Structured hover tooltip for a calendar bar (rendered as a rich popover by
+ *  CalendarView instead of the native `title` attribute). Mirrors the box-plot
+ *  `hoveredDetail.cells` `{k,v}` pattern. */
+export interface CalTip {
+  title: string; // "#101 API設計" (issue) or the milestone title
+  labelName: string | null; // label chip text for issues; null for milestones
+  color: string; // "R G B"
+  rows: { k: string; v: string }[]; // 担当者 / 状態 / 期間 …
+}
+/** One row in a day-overflow popover: every item covering that day (bars beyond
+ *  the lane cap are otherwise hidden). */
+export interface CalDayItem {
+  id: number;
+  track: "milestone" | "issue";
+  title: string;
+  assignee: string;
+  labelName: string;
+  color: string; // "R G B"
+  status: "open" | "closed" | "milestone";
+  statusLabel: string; // 進行中 | 完了 | マイルストーン
+  rangeLabel: string; // "7/6 – 7/13" (or single "7/8")
+  isCheckpoint: boolean;
+}
+/** One clipped bar piece within a single week row. A bar crossing a week
+ *  boundary yields one segment per row (isStart/isEnd flag the true ends).
+ *  `kind:"overflow"` is a per-day "+N 件" chip standing in for bars past the
+ *  lane cap (carries the day's full item list for the click-through popover). */
+export interface CalSegment {
+  key: string;
+  kind: "bar" | "overflow";
+  track: "milestone" | "issue";
+  id: number;
+  label: string; // rendered only when showLabel
+  showLabel: boolean; // true on the row where the item actually starts
+  meta: string; // legacy hover text (bars); unused by the renderer now
+  colStart: number; // 0..6
+  colSpan: number; // 1..7
+  gridRowStart: number; // 1-based lane row (milestone lanes first, then issues)
+  style: CSSProperties; // precomputed bar style incl. gridColumn/gridRow
+  starStyle?: CSSProperties; // present on a checkpoint's end segment (★)
+  isCheckpoint?: boolean; // true on every segment of a checkpoint issue bar
+  tip?: CalTip; // present on kind:"bar" — rich hover content
+  overflowLabel?: string; // "+N 件" (kind:"overflow")
+  dayLabel?: string; // "7/8（水）" (kind:"overflow")
+  items?: CalDayItem[]; // the day's full item list (kind:"overflow")
+}
+export interface CalDay {
+  key: string;
+  dayNum: number;
+  isToday: boolean;
+  isOtherMonth: boolean;
+  isWeekend: boolean;
+  headStyle: CSSProperties;
+  numStyle: CSSProperties;
+}
+export interface CalWeek {
+  key: string;
+  days: CalDay[]; // length 7
+  segments: CalSegment[];
+  laneCount: number; // occupied lanes in this row (0 = empty)
+  todayCol: number | null;
+  headStyle: CSSProperties; // day-number row (7-col grid)
+  gridStyle: CSSProperties; // bar grid container (relative, 7-col, auto-rows)
+  todayStripStyle: CSSProperties | null; // tinted vertical strip behind bars
+}
+export interface CalVals {
+  weeks: CalWeek[];
+  weekdayLabels: string[]; // rotated to WEEK_START
+  weekdayRowStyle: CSSProperties;
+  title: string; // "2026年 7月" | "6/29 – 7/12"
+  modeBtns: { month: Btn; twoweek: Btn };
+  navPrev: Btn;
+  navNext: Btn;
+  navToday: Btn;
+  laneHeight: number;
+  empty: boolean;
+  legend: { checkpointLabel: string };
+}
+
 export interface Vals {
   repo: string;
   asOf: string;
@@ -161,7 +312,9 @@ export interface Vals {
   groupBtns: { label: Btn; assignee: Btn; milestone: Btn };
   showRank: boolean;
   showDist: boolean;
-  panelTabs: { ranking: Btn; dist: Btn };
+  showCal: boolean;
+  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn };
+  calendar: CalVals;
   labelOptions: FilterOption[];
   assigneeOptions: FilterOption[];
   totalCount: number;
@@ -213,23 +366,12 @@ export function renderVals(
   data: Issue[],
   st: DashState,
   patch: Patch,
-  meta: { repo: string; asOf: string },
+  meta: { repo: string; asOf: string; milestones: Milestone[]; checkpointLabel: string },
 ): Vals {
   const showRank = st.panel === "ranking";
   const showDist = st.panel === "dist";
-  const seg = (active: boolean): CSSProperties => ({
-    padding: "7px 13px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "12.5px",
-    fontWeight: 600,
-    fontFamily: SANS,
-    letterSpacing: ".01em",
-    transition: "all .15s",
-    border: "1px solid " + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)),
-    background: active ? rgba(T.primary, 0.14) : rgb(T.canvasSoft),
-    color: active ? rgb(T.primary) : rgb(T.body),
-  });
+  const showCal = st.panel === "calendar";
+  const todayIndex = dayIndex(meta.asOf);
   const setS = (p: Partial<DashState>) => () => patch(p);
 
   // ── filtering ──
@@ -238,6 +380,15 @@ export function renderVals(
     (st.labels.length === 0 || st.labels.includes(it.label.name)) &&
     (st.assignees.length === 0 || st.assignees.includes(it.assignee));
   const filtered = data.filter(pass);
+  // Calendar reuses the same filtered issue set; milestones show unfiltered.
+  const calendar = buildCalendar(
+    filtered,
+    meta.milestones,
+    st,
+    patch,
+    todayIndex,
+    meta.checkpointLabel,
+  );
   const openArr = filtered.filter((i) => i.isOpen);
   const closedArr = filtered.filter((i) => !i.isOpen);
   const closedDur = closedArr.map((i) => i.linger).sort((a, b) => a - b);
@@ -641,10 +792,13 @@ export function renderVals(
     },
     showRank,
     showDist,
+    showCal,
     panelTabs: {
       ranking: { style: seg(st.panel === "ranking"), onClick: setS({ panel: "ranking" }) },
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
+      calendar: { style: seg(st.panel === "calendar"), onClick: setS({ panel: "calendar" }) },
     },
+    calendar,
     labelOptions,
     assigneeOptions,
     totalCount: data.length,
@@ -660,5 +814,451 @@ export function renderVals(
     boxTicks,
     groups: groupsOut,
     hoveredDetail,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ *  buildCalendar — the timeline view model
+ * ------------------------------------------------------------------ */
+const MILESTONE_COLOR = "176 131 240"; // distinct purple accent for milestone bars
+const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
+/** Max issue lanes drawn per week before the surplus collapses into a per-day
+ *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
+const MAX_LANES = 3;
+const JP_WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
+
+interface CalItem {
+  track: "milestone" | "issue";
+  id: number;
+  label: string;
+  color: string;
+  assignee: string; // "" for milestones
+  labelName: string; // issue label name; "" for milestones
+  startDay: number;
+  endDay: number;
+  isOpen: boolean;
+  isCheckpoint: boolean;
+  meta: string;
+  lane: number;
+}
+
+const fmtMD = (idx: number): string => {
+  const d = new Date(idx * DAY);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+};
+
+/** Inclusive day-range label: single day, or "start – end". */
+const calRange = (startDay: number, endDay: number): string =>
+  startDay === endDay ? fmtMD(startDay) : `${fmtMD(startDay)} – ${fmtMD(endDay)}`;
+/** "7/8（水）" — day label for the overflow popover header. */
+const dayLabelOf = (d: number): string => `${fmtMD(d)}（${JP_WEEKDAY[dowOf(d)]}）`;
+
+function itemStatus(it: CalItem): { status: "open" | "closed" | "milestone"; label: string } {
+  if (it.track === "milestone") return { status: "milestone", label: "マイルストーン" };
+  return it.isOpen ? { status: "open", label: "進行中" } : { status: "closed", label: "完了" };
+}
+
+/** Rich hover tooltip for a bar. */
+function buildTip(it: CalItem): CalTip {
+  const st = itemStatus(it);
+  const rows: { k: string; v: string }[] = [];
+  if (it.track === "issue") rows.push({ k: "担当者", v: it.assignee || "—" });
+  rows.push({ k: "状態", v: st.label });
+  rows.push({ k: "期間", v: calRange(it.startDay, it.endDay) });
+  return {
+    title: it.track === "issue" ? `#${it.id} ${it.label}` : it.label,
+    labelName: it.track === "issue" ? it.labelName : null,
+    color: it.color,
+    rows,
+  };
+}
+
+/** One item as it appears in the day-overflow popover. */
+function toDayItem(it: CalItem): CalDayItem {
+  const st = itemStatus(it);
+  return {
+    id: it.id,
+    track: it.track,
+    title: it.label,
+    assignee: it.assignee,
+    labelName: it.labelName,
+    color: it.color,
+    status: st.status,
+    statusLabel: st.label,
+    rangeLabel: calRange(it.startDay, it.endDay),
+    isCheckpoint: it.isCheckpoint,
+  };
+}
+
+/** Style for a per-day "+N 件" overflow chip (single column, overflow row). */
+function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
+  return {
+    gridColumn: `${colStart + 1} / span 1`,
+    gridRow: String(gridRowStart),
+    alignSelf: "center",
+    height: "16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 4px",
+    boxSizing: "border-box",
+    borderRadius: "5px",
+    fontSize: "10px",
+    fontFamily: SANS,
+    fontWeight: 700,
+    lineHeight: 1,
+    color: rgb(T.muted),
+    background: rgb(T.strong),
+    border: "1px solid " + rgba(T.hairline, 0.9),
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  };
+}
+
+/** Issue -> inclusive [startDay, endDay] day-index interval.
+ *  start = start_date || created_at; end = closed_at (if closed) || due_date || today.
+ *  Exported for unit tests. */
+export function issueInterval(it: Issue, todayIndex: number): { startDay: number; endDay: number } {
+  const startDay = it.startDate ? dayIndex(it.startDate) : dayIndex(it.createdAt);
+  let endDay: number;
+  if (!it.isOpen && it.closedAt) endDay = dayIndex(it.closedAt);
+  else if (it.dueDate) endDay = dayIndex(it.dueDate);
+  else endDay = todayIndex;
+  if (Number.isNaN(endDay)) endDay = startDay;
+  return { startDay, endDay: Math.max(endDay, startDay) };
+}
+
+/** Precomputed bar style. Left/right corners round only on the true start/end
+ *  row so a wrapped bar reads as one continuous span. */
+function barStyle(
+  it: CalItem,
+  isStart: boolean,
+  isEnd: boolean,
+  colStart: number,
+  colSpan: number,
+  gridRowStart: number,
+): CSSProperties {
+  const c = it.color;
+  const rL = isStart ? "5px" : "1px";
+  const rR = isEnd ? "5px" : "1px";
+  const s: CSSProperties = {
+    gridColumn: `${colStart + 1} / span ${colSpan}`,
+    gridRow: String(gridRowStart),
+    alignSelf: "center",
+    height: "16px",
+    display: "flex",
+    alignItems: "center",
+    gap: "3px",
+    padding: "0 5px",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    fontSize: "10px",
+    fontFamily: SANS,
+    fontWeight: 600,
+    lineHeight: 1,
+    borderRadius: `${rL} ${rR} ${rR} ${rL}`,
+    color: rgb(T.ink),
+    textShadow: "0 1px 2px rgb(0 0 0 / .55)",
+    cursor: "default",
+  };
+  if (it.track === "milestone") {
+    s.background = rgba(c, 0.2);
+    s.border = "1px solid " + rgba(c, 0.6);
+  } else if (it.isOpen) {
+    // hatched = still open (mirrors the ranking gantt)
+    s.background =
+      "repeating-linear-gradient(45deg," +
+      rgba(c, 0.5) +
+      " 0 5px," +
+      rgba(c, 0.16) +
+      " 5px 10px)";
+    s.border = "1px solid " + rgba(c, 0.75);
+  } else {
+    s.background = rgba(c, 0.9);
+    s.border = "1px solid " + rgb(c);
+  }
+  // Checkpoints are always drawn (never collapsed) and stand out with a gold
+  // ring + glow so deadlines are impossible to miss.
+  if (it.track === "issue" && it.isCheckpoint) {
+    s.border = "1px solid " + rgb(CHECKPOINT_STAR);
+    s.boxShadow =
+      "0 0 0 1px " + rgba(CHECKPOINT_STAR, 0.6) + ", 0 0 9px " + rgba(CHECKPOINT_STAR, 0.5);
+  }
+  return s;
+}
+
+/** Issues (already pass()-filtered) + milestones -> the calendar view model. */
+export function buildCalendar(
+  issues: Issue[],
+  milestones: Milestone[],
+  st: DashState,
+  patch: Patch,
+  todayIndex: number,
+  checkpointLabel: string,
+): CalVals {
+  const { weekStart, weeks } = windowFor(st.calMode, st.calAnchor);
+  const winStart = weekStart;
+  const winEnd = weekStart + weeks * 7 - 1;
+  const anchorMonth = new Date(st.calAnchor * DAY).getUTCMonth();
+
+  // ── milestones -> intervals ──
+  const mItemsAll: CalItem[] = [];
+  for (const m of milestones) {
+    const s = m.startDate ? dayIndex(m.startDate) : null;
+    const e = m.dueDate ? dayIndex(m.dueDate) : null;
+    if (s === null && e === null) continue; // no dates -> can't place
+    let startDay = s ?? (e as number);
+    let endDay = e ?? (s as number);
+    if (Number.isNaN(startDay) || Number.isNaN(endDay)) continue;
+    if (endDay < startDay) [startDay, endDay] = [endDay, startDay];
+    mItemsAll.push({
+      track: "milestone",
+      id: m.id,
+      label: m.title,
+      color: MILESTONE_COLOR,
+      assignee: "",
+      labelName: "",
+      startDay,
+      endDay,
+      isOpen: false,
+      isCheckpoint: false,
+      meta: `${m.title} · ${m.startDate ?? "?"} → ${m.dueDate ?? "?"}`,
+      lane: 0,
+    });
+  }
+
+  // ── issues -> intervals ──
+  const iItemsAll: CalItem[] = [];
+  for (const it of issues) {
+    const { startDay, endDay } = issueInterval(it, todayIndex);
+    if (Number.isNaN(startDay)) continue; // no valid start -> skip
+    iItemsAll.push({
+      track: "issue",
+      id: it.id,
+      label: it.title,
+      color: it.label.color,
+      assignee: it.assignee,
+      labelName: it.label.name,
+      startDay,
+      endDay,
+      isOpen: it.isOpen,
+      isCheckpoint: it.isCheckpoint,
+      meta: `#${it.id} ${it.title} · ${it.assignee}`,
+      lane: 0,
+    });
+  }
+
+  // ── clip to the visible window, then assign lanes per band ──
+  // Bands stack top-to-bottom: milestones, checkpoints (always shown), then
+  // regular issues (the only band subject to the lane cap / overflow).
+  const inWin = (it: CalItem) => it.endDay >= winStart && it.startDay <= winEnd;
+  const mItems = mItemsAll.filter(inWin);
+  const iItems = iItemsAll.filter(inWin);
+  const cpItems = iItems.filter((it) => it.isCheckpoint);
+  const regItems = iItems.filter((it) => !it.isCheckpoint);
+  const mLaneCount = assignLanes(mItems);
+  const cpLaneCount = assignLanes(cpItems);
+  assignLanes(regItems);
+  const issueOffset = mLaneCount + cpLaneCount;
+  // twoweek shows only 2 rows, so there is room for twice as many issue lanes
+  // before collapsing into overflow chips.
+  const maxLanes = st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES;
+
+  const laneHeight = 19;
+
+  // ── per-week rows ──
+  const weeksOut: CalWeek[] = [];
+  for (let r = 0; r < weeks; r++) {
+    const rowStart = weekStart + r * 7;
+    const rowEnd = rowStart + 6;
+
+    const days: CalDay[] = [];
+    for (let c = 0; c < 7; c++) {
+      const d = rowStart + c;
+      const date = new Date(d * DAY);
+      const isToday = d === todayIndex;
+      const dw = dowOf(d);
+      const isWeekend = dw === 0 || dw === 6;
+      const isOtherMonth = st.calMode === "month" && date.getUTCMonth() !== anchorMonth;
+      days.push({
+        key: "d" + d,
+        dayNum: date.getUTCDate(),
+        isToday,
+        isOtherMonth,
+        isWeekend,
+        headStyle: {
+          padding: "3px 6px 2px",
+          borderLeft: "1px solid " + rgba(T.hairline, 0.5),
+          borderTop: isToday ? "2px solid " + rgb(T.primary) : "2px solid transparent",
+          background: isToday ? rgba(T.primary, 0.08) : "transparent",
+          boxSizing: "border-box",
+        },
+        numStyle: {
+          fontFamily: MONO,
+          fontSize: "11px",
+          fontWeight: isToday ? 700 : 500,
+          color: isToday
+            ? rgb(T.primary)
+            : isOtherMonth
+              ? rgba(T.mutedSoft, 0.5)
+              : isWeekend
+                ? rgb(T.muted)
+                : rgb(T.body),
+        },
+      });
+    }
+
+    const segments: CalSegment[] = [];
+    let laneCount = 0;
+    const emit = (it: CalItem, laneOffset: number) => {
+      if (it.endDay < rowStart || it.startDay > rowEnd) return;
+      const segStart = Math.max(it.startDay, rowStart);
+      const segEnd = Math.min(it.endDay, rowEnd);
+      const colStart = segStart - rowStart;
+      const colSpan = segEnd - segStart + 1;
+      const isStart = it.startDay >= rowStart;
+      const isEnd = it.endDay <= rowEnd;
+      const gridRowStart = laneOffset + it.lane + 1;
+      laneCount = Math.max(laneCount, gridRowStart);
+      const s: CalSegment = {
+        key: `${it.track}-${it.id}-r${r}`,
+        kind: "bar",
+        track: it.track,
+        id: it.id,
+        label: it.label,
+        showLabel: isStart,
+        meta: it.meta,
+        colStart,
+        colSpan,
+        gridRowStart,
+        style: barStyle(it, isStart, isEnd, colStart, colSpan, gridRowStart),
+        isCheckpoint: it.track === "issue" && it.isCheckpoint,
+        tip: buildTip(it),
+      };
+      if (it.isCheckpoint && isEnd) {
+        s.starStyle = {
+          marginLeft: "auto",
+          flex: "0 0 auto",
+          fontSize: "13px",
+          lineHeight: 1,
+          color: rgb(CHECKPOINT_STAR),
+          textShadow: "0 0 6px " + rgba(CHECKPOINT_STAR, 0.9),
+        };
+      }
+      segments.push(s);
+    };
+    // Milestones + checkpoints always shown; regular issue bars up to the cap.
+    for (const it of mItems) emit(it, 0);
+    for (const it of cpItems) emit(it, mLaneCount);
+    for (const it of regItems) if (it.lane < maxLanes) emit(it, issueOffset);
+
+    // Per-day overflow chips for the regular issues past the cap. The chip's
+    // count is how many are hidden that day; the popover lists ALL items
+    // covering it (milestones + checkpoints + regular issues).
+    const covers = (it: CalItem, d: number) => it.startDay <= d && it.endDay >= d;
+    const overflowRow = issueOffset + maxLanes + 1;
+    for (let c = 0; c < 7; c++) {
+      const d = rowStart + c;
+      const hidden = regItems.filter((it) => it.lane >= maxLanes && covers(it, d)).length;
+      if (hidden === 0) continue;
+      const items: CalDayItem[] = [
+        ...mItems.filter((it) => covers(it, d)),
+        ...cpItems.filter((it) => covers(it, d)),
+        ...regItems.filter((it) => covers(it, d)).sort((a, b) => a.lane - b.lane),
+      ].map(toDayItem);
+      laneCount = Math.max(laneCount, overflowRow);
+      segments.push({
+        key: `overflow-${d}-r${r}`,
+        kind: "overflow",
+        track: "issue",
+        id: -d - 1, // synthetic, negative to avoid colliding with real ids
+        label: `+${hidden}`,
+        showLabel: true,
+        meta: "",
+        colStart: c,
+        colSpan: 1,
+        gridRowStart: overflowRow,
+        style: overflowStyle(c, overflowRow),
+        overflowLabel: `+${hidden} 件`,
+        dayLabel: dayLabelOf(d),
+        items,
+      });
+    }
+
+    const todayCol = todayIndex >= rowStart && todayIndex <= rowEnd ? todayIndex - rowStart : null;
+    weeksOut.push({
+      key: "w" + rowStart,
+      days,
+      segments,
+      laneCount,
+      todayCol,
+      headStyle: { display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))" },
+      gridStyle: {
+        position: "relative",
+        display: "grid",
+        gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+        gridAutoRows: laneHeight + "px",
+        rowGap: "3px",
+        padding: "5px 0 7px",
+        minHeight: laneHeight + "px",
+        borderTop: "1px solid " + rgba(T.hairline, 0.4),
+      },
+      todayStripStyle:
+        todayCol !== null
+          ? {
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: (todayCol / 7) * 100 + "%",
+              width: 100 / 7 + "%",
+              background: rgba(T.primary, 0.06),
+              pointerEvents: "none",
+            }
+          : null,
+    });
+  }
+
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => JP_WEEKDAY[(WEEK_START + i) % 7]);
+
+  const title =
+    st.calMode === "month"
+      ? (() => {
+          const d = new Date(st.calAnchor * DAY);
+          return `${d.getUTCFullYear()}年 ${d.getUTCMonth() + 1}月`;
+        })()
+      : `${fmtMD(winStart)} – ${fmtMD(winEnd)}`;
+
+  const navTo = (idx: number) => () => patch({ calAnchor: idx });
+  const stepMonth = (dir: number): number => {
+    const d = new Date(st.calAnchor * DAY);
+    return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + dir, 1) / DAY);
+  };
+  const prevAnchor = st.calMode === "twoweek" ? st.calAnchor - 14 : stepMonth(-1);
+  const nextAnchor = st.calMode === "twoweek" ? st.calAnchor + 14 : stepMonth(1);
+
+  return {
+    weeks: weeksOut,
+    weekdayLabels,
+    weekdayRowStyle: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+      marginTop: "4px",
+    },
+    title,
+    modeBtns: {
+      month: { style: seg(st.calMode === "month"), onClick: () => patch({ calMode: "month" }) },
+      twoweek: {
+        style: seg(st.calMode === "twoweek"),
+        onClick: () => patch({ calMode: "twoweek" }),
+      },
+    },
+    navPrev: { style: seg(false), onClick: navTo(prevAnchor) },
+    navNext: { style: seg(false), onClick: navTo(nextAnchor) },
+    navToday: { style: seg(false), onClick: navTo(todayIndex) },
+    laneHeight,
+    empty: mItems.length === 0 && iItems.length === 0,
+    legend: { checkpointLabel },
   };
 }

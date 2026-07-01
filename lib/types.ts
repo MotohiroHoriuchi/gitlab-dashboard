@@ -20,18 +20,37 @@ export interface Issue {
   assignee: string;
   milestone: string;
   label: IssueLabel;
+  // Absolute ISO dates — the calendar/timeline positions bars against these.
+  createdAt: string; // full ISO (from created_at)
+  closedAt: string | null; // full ISO (from closed_at) or null when open
+  dueDate: string | null; // "YYYY-MM-DD" (from due_date) or null
+  startDate: string | null; // "YYYY-MM-DD" — issue start_date, else iteration.start_date, else null
+  labelNames: string[]; // ALL label names (checkpoint detection; pickLabel keeps only the first)
+  isCheckpoint: boolean; // labelNames includes the configured checkpoint label
+}
+
+/** A GitLab milestone reduced to what the timeline needs. */
+export interface Milestone {
+  id: number;
+  title: string;
+  startDate: string | null; // "YYYY-MM-DD" or null
+  dueDate: string | null; // "YYYY-MM-DD" or null
+  state: string; // "active" | "closed"
 }
 
 export interface ApiResponse {
   repo: string;
   asOf: string; // YYYY-MM-DD
   issues: Issue[];
+  milestones: Milestone[];
+  checkpointLabel: string; // label name that marks an issue as a checkpoint (legend text)
 }
 
 export type StatusFilter = "all" | "open" | "closed";
 export type SortMode = "linger" | "recent" | "oldest";
 export type GroupBy = "label" | "assignee" | "milestone";
-export type Panel = "ranking" | "dist";
+export type Panel = "ranking" | "dist" | "calendar";
+export type CalMode = "month" | "twoweek";
 
 export interface DashState {
   status: StatusFilter;
@@ -41,6 +60,8 @@ export interface DashState {
   groupBy: GroupBy;
   hovered: string | null;
   panel: Panel;
+  calMode: CalMode;
+  calAnchor: number; // UTC day-index (floor(ms/DAY)) of the anchor day
 }
 
 /** A label with its color + frequency, derived from the fetched issues (used

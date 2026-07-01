@@ -6,6 +6,13 @@ export const revalidate = 60;
 
 export async function GET() {
   try {
+    // TEMPORARY dev-only mock: active only when MOCK_GITLAB is set (see
+    // .env.local + lib/devMock.ts). Lets the calendar render without a live
+    // GitLab connection. Remove this branch + lib/devMock.ts once creds exist.
+    if (process.env.MOCK_GITLAB) {
+      const { mockApiResponse } = await import("@/lib/devMock");
+      return NextResponse.json(mockApiResponse());
+    }
     return NextResponse.json(await getIssues());
   } catch (e) {
     if (e instanceof ConfigError) {
