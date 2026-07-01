@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1
+# NOTE: no `# syntax=` frontend directive on purpose — this Dockerfile uses only
+# built-in syntax (multi-stage + COPY --from), so pinning docker/dockerfile:1
+# would force BuildKit to pull that frontend from docker.io (fails behind DNS/
+# registry restrictions, e.g. colima: "resolve docker.io/docker/dockerfile:1 … no such host").
 
 # 1) install deps
 FROM node:22-alpine AS deps
