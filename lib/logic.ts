@@ -216,20 +216,51 @@ interface HoveredDetail {
 }
 
 /* ── calendar view-model ── */
+/** Structured hover tooltip for a calendar bar (rendered as a rich popover by
+ *  CalendarView instead of the native `title` attribute). Mirrors the box-plot
+ *  `hoveredDetail.cells` `{k,v}` pattern. */
+export interface CalTip {
+  title: string; // "#101 API設計" (issue) or the milestone title
+  labelName: string | null; // label chip text for issues; null for milestones
+  color: string; // "R G B"
+  rows: { k: string; v: string }[]; // 担当者 / 状態 / 期間 …
+}
+/** One row in a day-overflow popover: every item covering that day (bars beyond
+ *  the lane cap are otherwise hidden). */
+export interface CalDayItem {
+  id: number;
+  track: "milestone" | "issue";
+  title: string;
+  assignee: string;
+  labelName: string;
+  color: string; // "R G B"
+  status: "open" | "closed" | "milestone";
+  statusLabel: string; // 進行中 | 完了 | マイルストーン
+  rangeLabel: string; // "7/6 – 7/13" (or single "7/8")
+  isCheckpoint: boolean;
+}
 /** One clipped bar piece within a single week row. A bar crossing a week
- *  boundary yields one segment per row (isStart/isEnd flag the true ends). */
+ *  boundary yields one segment per row (isStart/isEnd flag the true ends).
+ *  `kind:"overflow"` is a per-day "+N 件" chip standing in for bars past the
+ *  lane cap (carries the day's full item list for the click-through popover). */
 export interface CalSegment {
   key: string;
+  kind: "bar" | "overflow";
   track: "milestone" | "issue";
   id: number;
   label: string; // rendered only when showLabel
   showLabel: boolean; // true on the row where the item actually starts
-  meta: string; // hover/title text
+  meta: string; // legacy hover text (bars); unused by the renderer now
   colStart: number; // 0..6
   colSpan: number; // 1..7
   gridRowStart: number; // 1-based lane row (milestone lanes first, then issues)
   style: CSSProperties; // precomputed bar style incl. gridColumn/gridRow
   starStyle?: CSSProperties; // present on a checkpoint's end segment (★)
+  isCheckpoint?: boolean; // true on every segment of a checkpoint issue bar
+  tip?: CalTip; // present on kind:"bar" — rich hover content
+  overflowLabel?: string; // "+N 件" (kind:"overflow")
+  dayLabel?: string; // "7/8（水）" (kind:"overflow")
+  items?: CalDayItem[]; // the day's full item list (kind:"overflow")
 }
 export interface CalDay {
   key: string;
@@ -834,12 +865,18 @@ export function renderVals(
  * ------------------------------------------------------------------ */
 const MILESTONE_COLOR = "176 131 240"; // distinct purple accent for milestone bars
 const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
+/** Max issue lanes drawn per week before the surplus collapses into a per-day
+ *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
+const MAX_LANES = 3;
+const JP_WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
 
 interface CalItem {
   track: "milestone" | "issue";
   id: number;
   label: string;
   color: string;
+  assignee: string; // "" for milestones
+  labelName: string; // issue label name; "" for milestones
   startDay: number;
   endDay: number;
   isOpen: boolean;
@@ -852,6 +889,75 @@ const fmtMD = (idx: number): string => {
   const d = new Date(idx * DAY);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
+
+/** Inclusive day-range label: single day, or "start – end". */
+const calRange = (startDay: number, endDay: number): string =>
+  startDay === endDay ? fmtMD(startDay) : `${fmtMD(startDay)} – ${fmtMD(endDay)}`;
+/** "7/8（水）" — day label for the overflow popover header. */
+const dayLabelOf = (d: number): string => `${fmtMD(d)}（${JP_WEEKDAY[dowOf(d)]}）`;
+
+function itemStatus(it: CalItem): { status: "open" | "closed" | "milestone"; label: string } {
+  if (it.track === "milestone") return { status: "milestone", label: "マイルストーン" };
+  return it.isOpen ? { status: "open", label: "進行中" } : { status: "closed", label: "完了" };
+}
+
+/** Rich hover tooltip for a bar. */
+function buildTip(it: CalItem): CalTip {
+  const st = itemStatus(it);
+  const rows: { k: string; v: string }[] = [];
+  if (it.track === "issue") rows.push({ k: "担当者", v: it.assignee || "—" });
+  rows.push({ k: "状態", v: st.label });
+  rows.push({ k: "期間", v: calRange(it.startDay, it.endDay) });
+  return {
+    title: it.track === "issue" ? `#${it.id} ${it.label}` : it.label,
+    labelName: it.track === "issue" ? it.labelName : null,
+    color: it.color,
+    rows,
+  };
+}
+
+/** One item as it appears in the day-overflow popover. */
+function toDayItem(it: CalItem): CalDayItem {
+  const st = itemStatus(it);
+  return {
+    id: it.id,
+    track: it.track,
+    title: it.label,
+    assignee: it.assignee,
+    labelName: it.labelName,
+    color: it.color,
+    status: st.status,
+    statusLabel: st.label,
+    rangeLabel: calRange(it.startDay, it.endDay),
+    isCheckpoint: it.isCheckpoint,
+  };
+}
+
+/** Style for a per-day "+N 件" overflow chip (single column, overflow row). */
+function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
+  return {
+    gridColumn: `${colStart + 1} / span 1`,
+    gridRow: String(gridRowStart),
+    alignSelf: "center",
+    height: "16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 4px",
+    boxSizing: "border-box",
+    borderRadius: "5px",
+    fontSize: "10px",
+    fontFamily: SANS,
+    fontWeight: 700,
+    lineHeight: 1,
+    color: rgb(T.muted),
+    background: rgb(T.strong),
+    border: "1px solid " + rgba(T.hairline, 0.9),
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  };
+}
 
 /** Issue -> inclusive [startDay, endDay] day-index interval.
  *  start = start_date || created_at; end = closed_at (if closed) || due_date || today.
@@ -916,6 +1022,13 @@ function barStyle(
     s.background = rgba(c, 0.9);
     s.border = "1px solid " + rgb(c);
   }
+  // Checkpoints are always drawn (never collapsed) and stand out with a gold
+  // ring + glow so deadlines are impossible to miss.
+  if (it.track === "issue" && it.isCheckpoint) {
+    s.border = "1px solid " + rgb(CHECKPOINT_STAR);
+    s.boxShadow =
+      "0 0 0 1px " + rgba(CHECKPOINT_STAR, 0.6) + ", 0 0 9px " + rgba(CHECKPOINT_STAR, 0.5);
+  }
   return s;
 }
 
@@ -948,6 +1061,8 @@ export function buildCalendar(
       id: m.id,
       label: m.title,
       color: MILESTONE_COLOR,
+      assignee: "",
+      labelName: "",
       startDay,
       endDay,
       isOpen: false,
@@ -967,6 +1082,8 @@ export function buildCalendar(
       id: it.id,
       label: it.title,
       color: it.label.color,
+      assignee: it.assignee,
+      labelName: it.label.name,
       startDay,
       endDay,
       isOpen: it.isOpen,
@@ -976,12 +1093,21 @@ export function buildCalendar(
     });
   }
 
-  // ── clip to the visible window, then assign lanes per track ──
+  // ── clip to the visible window, then assign lanes per band ──
+  // Bands stack top-to-bottom: milestones, checkpoints (always shown), then
+  // regular issues (the only band subject to the lane cap / overflow).
   const inWin = (it: CalItem) => it.endDay >= winStart && it.startDay <= winEnd;
   const mItems = mItemsAll.filter(inWin);
   const iItems = iItemsAll.filter(inWin);
+  const cpItems = iItems.filter((it) => it.isCheckpoint);
+  const regItems = iItems.filter((it) => !it.isCheckpoint);
   const mLaneCount = assignLanes(mItems);
-  assignLanes(iItems);
+  const cpLaneCount = assignLanes(cpItems);
+  assignLanes(regItems);
+  const issueOffset = mLaneCount + cpLaneCount;
+  // twoweek shows only 2 rows, so there is room for twice as many issue lanes
+  // before collapsing into overflow chips.
+  const maxLanes = st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES;
 
   const laneHeight = 19;
 
@@ -1041,6 +1167,7 @@ export function buildCalendar(
       laneCount = Math.max(laneCount, gridRowStart);
       const s: CalSegment = {
         key: `${it.track}-${it.id}-r${r}`,
+        kind: "bar",
         track: it.track,
         id: it.id,
         label: it.label,
@@ -1050,21 +1177,58 @@ export function buildCalendar(
         colSpan,
         gridRowStart,
         style: barStyle(it, isStart, isEnd, colStart, colSpan, gridRowStart),
+        isCheckpoint: it.track === "issue" && it.isCheckpoint,
+        tip: buildTip(it),
       };
       if (it.isCheckpoint && isEnd) {
         s.starStyle = {
           marginLeft: "auto",
           flex: "0 0 auto",
-          fontSize: "11px",
+          fontSize: "13px",
           lineHeight: 1,
           color: rgb(CHECKPOINT_STAR),
-          textShadow: "0 0 4px " + rgba(CHECKPOINT_STAR, 0.7),
+          textShadow: "0 0 6px " + rgba(CHECKPOINT_STAR, 0.9),
         };
       }
       segments.push(s);
     };
+    // Milestones + checkpoints always shown; regular issue bars up to the cap.
     for (const it of mItems) emit(it, 0);
-    for (const it of iItems) emit(it, mLaneCount);
+    for (const it of cpItems) emit(it, mLaneCount);
+    for (const it of regItems) if (it.lane < maxLanes) emit(it, issueOffset);
+
+    // Per-day overflow chips for the regular issues past the cap. The chip's
+    // count is how many are hidden that day; the popover lists ALL items
+    // covering it (milestones + checkpoints + regular issues).
+    const covers = (it: CalItem, d: number) => it.startDay <= d && it.endDay >= d;
+    const overflowRow = issueOffset + maxLanes + 1;
+    for (let c = 0; c < 7; c++) {
+      const d = rowStart + c;
+      const hidden = regItems.filter((it) => it.lane >= maxLanes && covers(it, d)).length;
+      if (hidden === 0) continue;
+      const items: CalDayItem[] = [
+        ...mItems.filter((it) => covers(it, d)),
+        ...cpItems.filter((it) => covers(it, d)),
+        ...regItems.filter((it) => covers(it, d)).sort((a, b) => a.lane - b.lane),
+      ].map(toDayItem);
+      laneCount = Math.max(laneCount, overflowRow);
+      segments.push({
+        key: `overflow-${d}-r${r}`,
+        kind: "overflow",
+        track: "issue",
+        id: -d - 1, // synthetic, negative to avoid colliding with real ids
+        label: `+${hidden}`,
+        showLabel: true,
+        meta: "",
+        colStart: c,
+        colSpan: 1,
+        gridRowStart: overflowRow,
+        style: overflowStyle(c, overflowRow),
+        overflowLabel: `+${hidden} 件`,
+        dayLabel: dayLabelOf(d),
+        items,
+      });
+    }
 
     const todayCol = todayIndex >= rowStart && todayIndex <= rowEnd ? todayIndex - rowStart : null;
     weeksOut.push({
@@ -1099,8 +1263,7 @@ export function buildCalendar(
     });
   }
 
-  const weekdayBase = ["日", "月", "火", "水", "木", "金", "土"];
-  const weekdayLabels = Array.from({ length: 7 }, (_, i) => weekdayBase[(WEEK_START + i) % 7]);
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => JP_WEEKDAY[(WEEK_START + i) % 7]);
 
   const title =
     st.calMode === "month"

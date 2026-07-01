@@ -1,16 +1,71 @@
 "use client";
 
-import { MONO, S, T, rgb, rgba, type CalVals } from "@/lib/logic";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import {
+  MONO,
+  SANS,
+  S,
+  T,
+  rgb,
+  rgba,
+  type CalDayItem,
+  type CalSegment,
+  type CalTip,
+  type CalVals,
+} from "@/lib/logic";
 
-/** Dumb renderer for the calendar/timeline view model (buildCalendar).
- *  All layout decisions live in lib/logic.ts; this only binds them to markup. */
+type HoverState = { tip: CalTip; x: number; y: number } | null;
+type DayState = { dayLabel: string; items: CalDayItem[]; x: number; y: number } | null;
+
+/** Renderer for the calendar/timeline view model (buildCalendar). Layout lives
+ *  in lib/logic.ts; this binds it to markup and owns only the client-side
+ *  overlay interactions (hover tooltip + day-overflow popover). */
 export default function CalendarView({ cal }: { cal: CalVals }) {
+  const [hover, setHover] = useState<HoverState>(null);
+  const [day, setDay] = useState<DayState>(null);
+  const [sparkle, setSparkle] = useState(0); // bump to replay the checkpoint-star shine
+  const dayRef = useRef<HTMLDivElement>(null);
+
+  // close the day popover on outside click / Escape (mirrors FilterDropdown)
+  useEffect(() => {
+    if (!day) return;
+    const onDown = (e: MouseEvent) => {
+      if (dayRef.current && !dayRef.current.contains(e.target as Node)) setDay(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDay(null);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [day]);
+
   const labelStyle = S(
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;",
   );
   const weekdayCell = S(
     "padding:2px 6px 5px; font-size:10px; font-weight:600; letter-spacing:.04em; color:rgb(110 118 129);",
   );
+  // Re-keying an element with `sparkle` remounts it, replaying these one-shot
+  // anims: checkpoints shine (star + gold ring), everything else dims briefly.
+  const sparkleAnim: CSSProperties = sparkle ? { animation: "gi-sparkle 3s ease-in-out" } : {};
+  const cpGlow: CSSProperties = sparkle ? { animation: "gi-checkpoint-glow 3s ease-in-out" } : {};
+  const dimAnim: CSSProperties = sparkle ? { animation: "gi-dim 3s ease-in-out" } : {};
+  const starWrap: CSSProperties = { color: rgb("255 199 74"), fontSize: "12px", ...sparkleAnim };
+  const segKey = (k: string) => (sparkle ? `${k}-${sparkle}` : k);
+
+  const showTip = (e: React.MouseEvent, tip: CalTip) => {
+    const x = Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 252));
+    const y = Math.max(8, Math.min(e.clientY + 14, window.innerHeight - 150));
+    setHover({ tip, x, y });
+  };
+  const openDay = (e: React.MouseEvent, s: CalSegment) => {
+    e.stopPropagation();
+    const x = Math.max(8, Math.min(e.clientX + 10, window.innerWidth - 320));
+    const y = Math.max(8, Math.min(e.clientY + 10, window.innerHeight - 340));
+    setDay({ dayLabel: s.dayLabel ?? "", items: s.items ?? [], x, y });
+  };
 
   return (
     <section
@@ -70,10 +125,28 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
           text="進行中イシュー"
         />
         <Swatch style={{ background: rgba(T.primary, 0.9), border: "1px solid " + rgb(T.primary) }} text="完了イシュー" />
-        <span style={S("display:inline-flex; align-items:center; gap:5px;")}>
-          <span style={{ color: rgb("255 199 74"), fontSize: "12px" }}>★</span>
+        <button
+          type="button"
+          onClick={() => setSparkle((n) => n + 1)}
+          title="クリックでチェックポイントの星を輝かせる"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            color: rgb(T.muted),
+            fontSize: "11px",
+            fontFamily: SANS,
+          }}
+        >
+          <span style={starWrap} key={sparkle ? `legend-star-${sparkle}` : "legend-star"}>
+            ★
+          </span>
           チェックポイント（{cal.legend.checkpointLabel}）
-        </span>
+        </button>
       </div>
 
       {/* ── weekday header ── */}
@@ -97,12 +170,33 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
           </div>
           <div style={week.gridStyle}>
             {week.todayStripStyle && <div style={week.todayStripStyle} />}
-            {week.segments.map((s) => (
-              <div key={s.key} style={s.style} title={s.meta}>
-                {s.showLabel && <span style={labelStyle}>{s.label}</span>}
-                {s.starStyle && <span style={s.starStyle}>★</span>}
-              </div>
-            ))}
+            {week.segments.map((s) =>
+              s.kind === "overflow" ? (
+                <div
+                  key={segKey(s.key)}
+                  style={{ ...s.style, ...dimAnim }}
+                  onClick={(e) => openDay(e, s)}
+                  title="この日の予定をすべて表示"
+                >
+                  {s.overflowLabel} ▾
+                </div>
+              ) : (
+                <div
+                  key={segKey(s.key)}
+                  style={{ ...s.style, ...(s.isCheckpoint ? cpGlow : dimAnim) }}
+                  onMouseEnter={(e) => s.tip && showTip(e, s.tip)}
+                  onMouseMove={(e) => s.tip && showTip(e, s.tip)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  {s.showLabel && <span style={labelStyle}>{s.label}</span>}
+                  {s.starStyle && (
+                    <span key={`${s.key}-star-${sparkle}`} style={{ ...s.starStyle, ...sparkleAnim }}>
+                      ★
+                    </span>
+                  )}
+                </div>
+              ),
+            )}
           </div>
         </div>
       ))}
@@ -112,8 +206,175 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
           この期間に表示できる予定がありません。マイルストーン／期限を設定するか、期間を移動してください。
         </div>
       )}
+
+      {hover && <BarTooltip hover={hover} />}
+      {day && <DayPopover day={day} innerRef={dayRef} onClose={() => setDay(null)} />}
     </section>
   );
+}
+
+/* ── hover tooltip for a single bar ── */
+function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
+  const { tip, x, y } = hover;
+  const box: CSSProperties = {
+    position: "fixed",
+    left: x,
+    top: y,
+    zIndex: 60,
+    pointerEvents: "none",
+    minWidth: "160px",
+    maxWidth: "240px",
+    background: rgb(T.canvasSoft),
+    border: "1px solid " + rgb(T.hairline),
+    borderRadius: "8px",
+    boxShadow: "0 10px 30px rgba(0,0,0,.55)",
+    padding: "9px 11px",
+    fontFamily: SANS,
+  };
+  return (
+    <div style={box}>
+      <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "6px" }}>
+        <span style={dot(tip.color)} />
+        <span
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            fontSize: "12px",
+            fontWeight: 700,
+            color: rgb(T.ink),
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {tip.title}
+        </span>
+      </div>
+      {tip.labelName && (
+        <span
+          style={{
+            display: "inline-block",
+            marginBottom: "6px",
+            padding: "1px 7px",
+            borderRadius: "999px",
+            fontSize: "10px",
+            fontWeight: 600,
+            fontFamily: MONO,
+            background: rgba(tip.color, 0.16),
+            color: rgb(tip.color),
+            border: "1px solid " + rgba(tip.color, 0.32),
+          }}
+        >
+          {tip.labelName}
+        </span>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px" }}>
+        {tip.rows.map((r, i) => (
+          <div key={i} style={{ display: "contents" }}>
+            <span style={{ fontSize: "10.5px", color: rgb(T.mutedSoft) }}>{r.k}</span>
+            <span style={{ fontSize: "11px", color: rgb(T.body) }}>{r.v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── day-overflow popover: every item covering a given day ── */
+function DayPopover({
+  day,
+  innerRef,
+  onClose,
+}: {
+  day: NonNullable<DayState>;
+  innerRef: React.RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}) {
+  const box: CSSProperties = {
+    position: "fixed",
+    left: day.x,
+    top: day.y,
+    zIndex: 70,
+    width: "300px",
+    maxHeight: "340px",
+    overflowY: "auto",
+    background: rgb(T.canvasSoft),
+    border: "1px solid " + rgb(T.hairline),
+    borderRadius: "10px",
+    boxShadow: "0 14px 36px rgba(0,0,0,.6)",
+    padding: "10px 12px 12px",
+    fontFamily: SANS,
+  };
+  return (
+    <div ref={innerRef} style={box}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+        <span style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.ink) }}>{day.dayLabel}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="閉じる"
+          style={{
+            border: "none",
+            background: "transparent",
+            color: rgb(T.mutedSoft),
+            cursor: "pointer",
+            fontSize: "14px",
+            lineHeight: 1,
+            padding: "2px 4px",
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+        {day.items.map((it, i) => (
+          <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+            <span style={{ ...dot(it.color), marginTop: "4px" }} />
+            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <span
+                  style={{
+                    minWidth: 0,
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: rgb(T.body),
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {it.track === "issue" ? `#${it.id} ${it.title}` : it.title}
+                </span>
+                {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "11px" }}>★</span>}
+              </div>
+              <div style={{ marginTop: "2px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
+                <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
+                {metaRest(it) && <span> · {metaRest(it)}</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const dot = (color: string): CSSProperties => ({
+  width: "9px",
+  height: "9px",
+  borderRadius: "2px",
+  background: rgb(color),
+  flex: "0 0 auto",
+});
+
+function statusColor(status: CalDayItem["status"]): string {
+  return status === "open" ? T.primary : status === "closed" ? T.muted : "176 131 240";
+}
+
+/** "担当者 · 期間 · ラベル" — the non-status part of an item's meta line. */
+function metaRest(it: CalDayItem): string {
+  const parts = [it.track === "issue" ? it.assignee : "", it.rangeLabel, it.track === "issue" ? it.labelName : ""];
+  return parts.filter(Boolean).join(" · ");
 }
 
 function Swatch({ style, text }: { style: React.CSSProperties; text: string }) {

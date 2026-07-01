@@ -22,6 +22,61 @@ body {
     transform: scale(0.7);
   }
 }
+/* Checkpoint star "shine" burst — fired when the calendar legend label is clicked. */
+@keyframes gi-sparkle {
+  0% {
+    transform: scale(1) rotate(0deg);
+    filter: brightness(1) drop-shadow(0 0 2px rgb(255 199 74 / 0.6));
+  }
+  30% {
+    transform: scale(2) rotate(180deg);
+    filter: brightness(2.4) drop-shadow(0 0 12px rgb(255 199 74 / 1));
+  }
+  60% {
+    transform: scale(1.35) rotate(310deg);
+    filter: brightness(1.7) drop-shadow(0 0 8px rgb(255 199 74 / 0.9));
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    filter: brightness(1) drop-shadow(0 0 2px rgb(255 199 74 / 0.6));
+  }
+}
+/* Everything that is NOT a checkpoint fades briefly so the checkpoints stand
+ * out (spotlight), then returns to full opacity — no cleanup timer needed. */
+@keyframes gi-dim {
+  0% {
+    opacity: 1;
+  }
+  35% {
+    opacity: 0.16;
+  }
+  60% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+/* Checkpoint bar's gold ring "glow" burst — fired alongside gi-sparkle. Start/end
+ * frames match barStyle's static ring so it settles back seamlessly. */
+@keyframes gi-checkpoint-glow {
+  0% {
+    border-color: rgb(255 199 74);
+    box-shadow: 0 0 0 1px rgb(255 199 74 / 0.6), 0 0 9px rgb(255 199 74 / 0.5);
+  }
+  30% {
+    border-color: rgb(255 236 150);
+    box-shadow: 0 0 0 2px rgb(255 199 74 / 1), 0 0 24px rgb(255 199 74 / 0.95);
+  }
+  60% {
+    border-color: rgb(255 224 120);
+    box-shadow: 0 0 0 2px rgb(255 199 74 / 0.85), 0 0 16px rgb(255 199 74 / 0.8);
+  }
+  100% {
+    border-color: rgb(255 199 74);
+    box-shadow: 0 0 0 1px rgb(255 199 74 / 0.6), 0 0 9px rgb(255 199 74 / 0.5);
+  }
+}
 button {
   font: inherit;
 }

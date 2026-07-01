@@ -29,6 +29,10 @@ function twoWeekState(anchor: number): DashState {
   };
 }
 
+function monthState(anchor: number): DashState {
+  return { ...twoWeekState(anchor), calMode: "month" };
+}
+
 function mkIssue(p: Partial<Issue>): Issue {
   return {
     id: 1,
@@ -177,6 +181,96 @@ describe("buildCalendar", () => {
     const cal = buildCalendar([iss], [ms], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
     const issueSeg = cal.weeks.flatMap((w) => w.segments).find((s) => s.id === 2 && s.track === "issue")!;
     expect(issueSeg.gridRowStart).toBeGreaterThanOrEqual(2); // below the single milestone lane
+  });
+
+  it("attaches a structured tooltip to every bar", () => {
+    const iss = mkIssue({
+      id: 42,
+      title: "認証",
+      assignee: "鈴木",
+      createdAt: "2026-07-07",
+      dueDate: "2026-07-09",
+      isOpen: true,
+      label: { name: "backend", color: "0 217 146" },
+    });
+    const cal = buildCalendar([iss], [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const seg = cal.weeks.flatMap((w) => w.segments).find((s) => s.id === 42)!;
+    expect(seg.kind).toBe("bar");
+    expect(seg.tip).toBeDefined();
+    expect(seg.tip!.title).toBe("#42 認証");
+    expect(seg.tip!.labelName).toBe("backend");
+    expect(seg.tip!.rows.map((r) => r.k)).toContain("担当者");
+  });
+
+  it("caps issue lanes at 3 in month mode and emits a per-day '+N 件' chip", () => {
+    // 5 issues fully overlapping the window -> lanes 0..4; cap 3 hides 2/day.
+    const issues = Array.from({ length: 5 }, (_, i) =>
+      mkIssue({ id: 200 + i, createdAt: "2026-07-06", dueDate: "2026-07-19", isOpen: true }),
+    );
+    const cal = buildCalendar(issues, [], monthState(anchorMon), noop, TODAY, "checkpoint");
+    const segs = cal.weeks.flatMap((w) => w.segments);
+
+    const issueBars = segs.filter((s) => s.kind === "bar" && s.track === "issue");
+    const lanes = new Set(issueBars.map((s) => s.gridRowStart));
+    expect(lanes.size).toBe(3); // only MAX_LANES lanes drawn
+
+    const chips = segs.filter((s) => s.kind === "overflow");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((s) => s.overflowLabel === "+2 件")).toBe(true); // 2 hidden/day
+    // the click-through popover lists ALL items covering that day (all 5 issues)
+    expect(chips[0].items!.length).toBe(5);
+    expect(chips[0].colSpan).toBe(1);
+  });
+
+  it("doubles the lane cap to 6 in twoweek mode", () => {
+    // 6 overlap -> all fit (no overflow); 8 overlap -> 2 hidden.
+    const six = Array.from({ length: 6 }, (_, i) =>
+      mkIssue({ id: 210 + i, createdAt: "2026-07-06", dueDate: "2026-07-19" }),
+    );
+    const calSix = buildCalendar(six, [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const segsSix = calSix.weeks.flatMap((w) => w.segments);
+    expect(segsSix.filter((s) => s.kind === "overflow").length).toBe(0);
+    expect(new Set(segsSix.filter((s) => s.kind === "bar").map((s) => s.gridRowStart)).size).toBe(6);
+
+    const eight = Array.from({ length: 8 }, (_, i) =>
+      mkIssue({ id: 220 + i, createdAt: "2026-07-06", dueDate: "2026-07-19" }),
+    );
+    const calEight = buildCalendar(eight, [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const chips = calEight.weeks.flatMap((w) => w.segments).filter((s) => s.kind === "overflow");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((s) => s.overflowLabel === "+2 件")).toBe(true);
+  });
+
+  it("keeps milestones visible and exempt from the issue lane cap", () => {
+    const ms: Milestone = { id: 1, title: "m", startDate: "2026-07-06", dueDate: "2026-07-19", state: "active" };
+    const issues = Array.from({ length: 5 }, (_, i) =>
+      mkIssue({ id: 300 + i, createdAt: "2026-07-06", dueDate: "2026-07-19" }),
+    );
+    const cal = buildCalendar(issues, [ms], monthState(anchorMon), noop, TODAY, "checkpoint");
+    const segs = cal.weeks.flatMap((w) => w.segments);
+
+    expect(segs.some((s) => s.track === "milestone" && s.kind === "bar")).toBe(true);
+    const issueBars = segs.filter((s) => s.kind === "bar" && s.track === "issue");
+    const lanes = new Set(issueBars.map((s) => s.gridRowStart));
+    expect(lanes.size).toBe(3); // still capped
+    expect(Math.min(...lanes)).toBe(2); // issue lanes sit below the 1 milestone lane
+  });
+
+  it("never hides checkpoint issues under the lane cap", () => {
+    // 5 regular issues saturate the cap; a checkpoint must still be drawn.
+    const regular = Array.from({ length: 5 }, (_, i) =>
+      mkIssue({ id: 400 + i, createdAt: "2026-07-06", dueDate: "2026-07-19" }),
+    );
+    const cp = mkIssue({ id: 499, createdAt: "2026-07-06", dueDate: "2026-07-19", isCheckpoint: true });
+    const cal = buildCalendar([...regular, cp], [], monthState(anchorMon), noop, TODAY, "checkpoint");
+    const segs = cal.weeks.flatMap((w) => w.segments);
+
+    // the checkpoint is drawn as a bar (never collapsed into overflow)
+    expect(segs.some((s) => s.kind === "bar" && s.id === 499)).toBe(true);
+    expect(segs.some((s) => s.kind === "overflow" && s.id === 499)).toBe(false);
+    // overflow reflects only the regular issues past the cap (5 - 3 = 2)
+    const chips = segs.filter((s) => s.kind === "overflow");
+    expect(chips.every((s) => s.overflowLabel === "+2 件")).toBe(true);
   });
 });
 
