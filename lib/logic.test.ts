@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   assignLanes,
   buildCalendar,
+  buildRelationIndex,
+  calBarKey,
+  chipSelectionRole,
   colOf,
   dayIndex,
   DEFAULT_HIDDEN_DOWS,
@@ -9,10 +12,13 @@ import {
   dowOf,
   issueFilterLabels,
   issueInterval,
+  relBadgeText,
   renderVals,
   sanitizeHiddenDows,
   scheduleSummary,
   scheduleVariance,
+  selectionOverlay,
+  selectionRole,
   toggleDow,
   windowFor,
   type Patch,
@@ -59,6 +65,9 @@ function mkIssue(p: Partial<Issue>): Issue {
     startDate: null,
     labelNames: [],
     isCheckpoint: false,
+    parentIid: null,
+    childIids: [],
+    related: [],
     ...p,
   };
 }
@@ -422,6 +431,155 @@ describe("buildCalendar", () => {
     // overflow reflects only the regular issues past the cap (5 - 3 = 2)
     const chips = segs.filter((s) => s.kind === "overflow");
     expect(chips.every((s) => s.overflowLabel === "+2 件")).toBe(true);
+  });
+});
+
+describe("click-focus relations", () => {
+  const anchorMon = dayIndex("2026-07-06"); // Monday -> window 07-06 .. 07-19
+  const ms: Milestone = { id: 1, title: "Sprint 1", startDate: "2026-07-06", dueDate: "2026-07-19", state: "active" };
+
+  it("completes parent/child from either side's data", () => {
+    const parent = mkIssue({ id: 10, childIids: [11] }); // knows only #11
+    const child1 = mkIssue({ id: 11 });
+    const child2 = mkIssue({ id: 12, parentIid: 10 }); // parent doesn't list #12
+    const idx = buildRelationIndex([parent, child1, child2], []);
+    expect(idx["issue:10"]["issue:11"]).toBe("child");
+    expect(idx["issue:11"]["issue:10"]).toBe("parent");
+    expect(idx["issue:10"]["issue:12"]).toBe("child");
+    expect(idx["issue:12"]["issue:10"]).toBe("parent");
+  });
+
+  it("symmetrizes one-way related links", () => {
+    const a = mkIssue({ id: 1, related: [{ iid: 2, linkType: "relates_to" }] });
+    const b = mkIssue({ id: 2 });
+    const idx = buildRelationIndex([a, b], []);
+    expect(idx["issue:1"]["issue:2"]).toBe("related");
+    expect(idx["issue:2"]["issue:1"]).toBe("related");
+  });
+
+  it("hierarchy outranks a contradictory 'related' claim on the same pair", () => {
+    const a = mkIssue({ id: 1, childIids: [2] });
+    const b = mkIssue({ id: 2, related: [{ iid: 1, linkType: "relates_to" }] });
+    const idx = buildRelationIndex([a, b], []);
+    expect(idx["issue:1"]["issue:2"]).toBe("child");
+    expect(idx["issue:2"]["issue:1"]).toBe("parent");
+  });
+
+  it("links issues to their milestone bar (and Backlog to nothing)", () => {
+    const inMs = mkIssue({ id: 1, milestone: "Sprint 1" });
+    const backlog = mkIssue({ id: 2 }); // milestone "Backlog" — no bar to link
+    const idx = buildRelationIndex([inMs, backlog], [ms]);
+    expect(idx["issue:1"]["milestone:1"]).toBe("milestone");
+    expect(idx["milestone:1"]["issue:1"]).toBe("member");
+    expect(idx["issue:2"]).toBeUndefined();
+  });
+
+  it("ignores relations pointing outside the filtered set", () => {
+    const a = mkIssue({
+      id: 1,
+      parentIid: 99,
+      childIids: [98],
+      related: [{ iid: 97, linkType: "relates_to" }],
+    });
+    const idx = buildRelationIndex([a], []);
+    expect(idx["issue:1"]).toBeUndefined();
+  });
+
+  it("selectionRole: self / relation / dim / no selection", () => {
+    const a = mkIssue({ id: 1, childIids: [2] });
+    const idx = buildRelationIndex([a, mkIssue({ id: 2 }), mkIssue({ id: 3 })], []);
+    expect(selectionRole(null, idx, "issue", 1)).toBeNull();
+    const sel = calBarKey("issue", 1);
+    expect(selectionRole(sel, idx, "issue", 1)).toBe("self");
+    expect(selectionRole(sel, idx, "issue", 2)).toBe("child");
+    expect(selectionRole(sel, idx, "issue", 3)).toBe("dim");
+  });
+
+  it("chipSelectionRole rings a chip HIDING a related item, dims otherwise", () => {
+    const a = mkIssue({ id: 1, childIids: [2] });
+    const idx = buildRelationIndex([a, mkIssue({ id: 2 }), mkIssue({ id: 3 })], []);
+    const sel = calBarKey("issue", 1);
+    expect(
+      chipSelectionRole(sel, idx, [
+        { track: "issue", id: 2, hidden: true },
+        { track: "issue", id: 3, hidden: true },
+      ]),
+    ).toBe("related");
+    expect(chipSelectionRole(sel, idx, [{ track: "issue", id: 3, hidden: true }])).toBe("dim");
+    // a related-but-VISIBLE covering item doesn't ring the chip (its own bar shows the highlight)
+    expect(chipSelectionRole(sel, idx, [{ track: "issue", id: 2, hidden: false }])).toBe("dim");
+    expect(chipSelectionRole(null, idx, [{ track: "issue", id: 2, hidden: true }])).toBeNull();
+  });
+
+  it("selectionOverlay: {} when idle, dim opacity, self ring prepended to the base shadow", () => {
+    expect(selectionOverlay(null)).toEqual({});
+    expect(selectionOverlay("dim").opacity).toBe(0.22);
+    const gold = "0 0 0 1px gold";
+    const self = selectionOverlay("self", gold);
+    expect(String(self.boxShadow)).toContain(gold); // checkpoint ring survives…
+    expect(String(self.boxShadow).indexOf(gold)).toBeGreaterThan(0); // …underneath
+    expect(selectionOverlay("child").boxShadow).toBeDefined();
+  });
+
+  it("relBadgeText maps roles to badges (none for self/dim/idle)", () => {
+    expect(relBadgeText("parent")).toBe("親");
+    expect(relBadgeText("child")).toBe("子");
+    expect(relBadgeText("related")).toBe("関連");
+    expect(relBadgeText("milestone")).toBe("MS");
+    expect(relBadgeText("member")).toBe("配下");
+    expect(relBadgeText("self")).toBeNull();
+    expect(relBadgeText("dim")).toBeNull();
+    expect(relBadgeText(null)).toBeNull();
+  });
+
+  it("buildCalendar exposes the relation index on CalVals", () => {
+    const iss = mkIssue({ id: 5, milestone: "Sprint 1", createdAt: "2026-07-07", dueDate: "2026-07-10" });
+    const cal = buildCalendar([iss], [ms], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    expect(cal.relations["milestone:1"]["issue:5"]).toBe("member");
+    expect(cal.relations["issue:5"]["milestone:1"]).toBe("milestone");
+  });
+
+  it("lists relations in the bar tooltip, milestone 配下 included", () => {
+    // #19 is outside the set — the listing still names it (bars just won't highlight)
+    const iss = mkIssue({
+      id: 20,
+      createdAt: "2026-07-06",
+      dueDate: "2026-07-10",
+      parentIid: 19,
+      childIids: [21],
+      related: [{ iid: 22, linkType: "blocks" }],
+      milestone: "Sprint 1",
+    });
+    const cal = buildCalendar([iss], [ms], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const bar = cal.weeks.flatMap((w) => w.segments).find((s) => s.id === 20 && s.kind === "bar")!;
+    const rows = Object.fromEntries(bar.tip!.rows.map((r) => [r.k, r.v]));
+    expect(rows["親"]).toBe("#19");
+    expect(rows["子"]).toBe("#21");
+    expect(rows["ブロック"]).toBe("#22");
+    const msBar = cal.weeks
+      .flatMap((w) => w.segments)
+      .find((s) => s.track === "milestone" && s.kind === "bar")!;
+    expect(Object.fromEntries(msBar.tip!.rows.map((r) => [r.k, r.v]))["配下"]).toBe("#20");
+  });
+
+  it("caps tooltip iid lists at 6 with an …他N件 tail", () => {
+    const kids = Array.from({ length: 8 }, (_, i) => 30 + i);
+    const parent = mkIssue({ id: 29, createdAt: "2026-07-06", dueDate: "2026-07-10", childIids: kids });
+    const cal = buildCalendar([parent], [], twoWeekState(anchorMon), noop, TODAY, "checkpoint");
+    const bar = cal.weeks.flatMap((w) => w.segments).find((s) => s.id === 29 && s.kind === "bar")!;
+    expect(bar.tip!.rows.find((r) => r.k === "子")!.v).toBe("#30, #31, #32, #33, #34, #35 …他2件");
+  });
+
+  it("carries a relLine on day-popover items", () => {
+    // saturate the month-mode cap so an overflow chip exists, then check its items
+    const parent = mkIssue({ id: 40, createdAt: "2026-07-06", dueDate: "2026-07-19", childIids: [41] });
+    const others = [41, 42, 43, 44].map((id) =>
+      mkIssue({ id, createdAt: "2026-07-06", dueDate: "2026-07-19" }),
+    );
+    const cal = buildCalendar([parent, ...others], [], monthState(anchorMon), noop, TODAY, "checkpoint");
+    const chip = cal.weeks.flatMap((w) => w.segments).find((s) => s.kind === "overflow")!;
+    expect(chip.items!.find((it) => it.id === 40)!.relLine).toBe("子 #41");
+    expect(chip.items!.find((it) => it.id === 42)!.relLine).toBe("");
   });
 });
 

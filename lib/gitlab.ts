@@ -1,7 +1,7 @@
 // Server-only GitLab REST API client + issue mapping.
 // The token lives here and never crosses to the browser.
 
-import type { ApiResponse, Issue, IssueLabel, Milestone } from "./types";
+import type { ApiResponse, Issue, IssueLabel, LinkType, Milestone, RelatedRef } from "./types";
 
 const DAY = 86_400_000;
 const UNLABELED: IssueLabel = { name: "未分類", color: "110 118 129" };
@@ -97,12 +97,22 @@ export interface GitLabMilestone {
   state: string;
 }
 
+/** One issue's work-item relations (GraphQL, see fetchWorkItemRelations). */
+export interface IssueRelations {
+  parentIid: number | null;
+  childIids: number[];
+  related: RelatedRef[];
+}
+
 /** GitLab issue -> normalized Issue. `now` is injected for deterministic tests.
- *  `checkpointLabel` is defaulted so 2-arg callers (tests) keep working. */
+ *  `checkpointLabel` and `rel` are defaulted so shorter-arity callers (tests)
+ *  keep working; `rel` stays undefined when the GraphQL relations fetch
+ *  degraded (older GitLab) — the issue then simply has no relations. */
 export function mapIssue(
   raw: GitLabIssue,
   now: number,
   checkpointLabel: string = CHECKPOINT_DEFAULT,
+  rel?: IssueRelations,
 ): Issue {
   const created = Date.parse(raw.created_at);
   const openedAgo = Math.max(0, Math.floor((now - created) / DAY));
@@ -140,6 +150,9 @@ export function mapIssue(
     startDate: raw.start_date ?? raw.iteration?.start_date ?? null,
     labelNames,
     isCheckpoint: labelNames.some((n) => n.toLowerCase() === cp),
+    parentIid: rel?.parentIid ?? null,
+    childIids: rel?.childIids ?? [],
+    related: rel?.related ?? [],
   };
 }
 
@@ -152,6 +165,61 @@ export function mapMilestone(m: GitLabMilestone): Milestone {
     dueDate: m.due_date ?? null,
     state: m.state,
   };
+}
+
+/* ------------------- work-item relations (GraphQL) ------------------- */
+// Hierarchy (parent/children tasks) and linked items aren't on the REST issue
+// payload; fetching them per-issue would be N+1 over up to 2000 issues. One
+// paginated GraphQL query over the project's work items gets everything.
+
+/** GraphQL work-item node. Widgets we don't fragment on come back as {}. */
+export interface GqlWorkItemNode {
+  iid: string;
+  widgets?: Array<{
+    parent?: { iid: string; workItemType?: { name?: string } | null } | null;
+    children?: { nodes?: Array<{ iid: string } | null> | null } | null;
+    linkedItems?: {
+      nodes?: Array<{ linkType?: string | null; workItem?: { iid: string } | null } | null> | null;
+    } | null;
+  } | null> | null;
+}
+
+/** Unknown/renamed enum values degrade to the free-tier "relates_to". */
+function normalizeLinkType(t: string | null | undefined): LinkType {
+  const v = (t ?? "").toLowerCase();
+  if (v === "blocks") return "blocks";
+  if (v === "is_blocked_by" || v === "blocked_by") return "is_blocked_by";
+  return "relates_to";
+}
+
+/** GraphQL nodes -> iid-keyed relations. Work items share the issue iid space
+ *  (GraphQL sends it as a string), so Number() joins them to the REST issues.
+ *  Epic parents live in a *different* (group-level) iid space — keeping them
+ *  would falsely link e.g. epic &7 to issue #7 — so they are dropped. */
+export function mapWorkItemRelations(nodes: GqlWorkItemNode[]): Map<number, IssueRelations> {
+  const out = new Map<number, IssueRelations>();
+  for (const node of nodes) {
+    const iid = Number(node?.iid);
+    if (!Number.isInteger(iid)) continue;
+    const rel: IssueRelations = { parentIid: null, childIids: [], related: [] };
+    for (const w of node.widgets ?? []) {
+      if (!w) continue;
+      if (w.parent && w.parent.workItemType?.name !== "Epic") {
+        const p = Number(w.parent.iid);
+        if (Number.isInteger(p)) rel.parentIid = p;
+      }
+      for (const c of w.children?.nodes ?? []) {
+        const cIid = Number(c?.iid);
+        if (Number.isInteger(cIid)) rel.childIids.push(cIid);
+      }
+      for (const l of w.linkedItems?.nodes ?? []) {
+        const lIid = Number(l?.workItem?.iid);
+        if (Number.isInteger(lIid)) rel.related.push({ iid: lIid, linkType: normalizeLinkType(l?.linkType) });
+      }
+    }
+    if (rel.parentIid !== null || rel.childIids.length || rel.related.length) out.set(iid, rel);
+  }
+  return out;
 }
 
 /* ---------------------------- fetching ---------------------------- */
@@ -219,8 +287,13 @@ async function fetchMilestones(cfg: GitLabConfig): Promise<GitLabMilestone[]> {
 
 /** Project identity for the header: `repo` = "host/group/project" (canonical
  *  path, subtitle), `project` = GitLab's display name "Group / Project" (title).
- *  Degrades to the configured projectId on any error. */
-async function fetchRepoMeta(cfg: GitLabConfig): Promise<{ repo: string; project: string }> {
+ *  `fullPath` feeds the GraphQL project() lookup, which accepts only a path —
+ *  when the config uses a numeric id and this fetch fails, it stays null and
+ *  the relations fetch is skipped. Degrades to the configured projectId. */
+async function fetchRepoMeta(
+  cfg: GitLabConfig,
+): Promise<{ repo: string; project: string; fullPath: string | null }> {
+  const configuredPath = /^\d+$/.test(cfg.projectId) ? null : cfg.projectId;
   try {
     const res = await gitlabFetch(cfg, `/projects/${projectPath(cfg)}`);
     const p = (await res.json()) as {
@@ -231,9 +304,89 @@ async function fetchRepoMeta(cfg: GitLabConfig): Promise<{ repo: string; project
     return {
       repo: p.path_with_namespace ? `${host}/${p.path_with_namespace}` : cfg.projectId,
       project: p.name_with_namespace || p.path_with_namespace || cfg.projectId,
+      fullPath: p.path_with_namespace ?? configuredPath,
     };
   } catch {
-    return { repo: cfg.projectId, project: cfg.projectId };
+    return { repo: cfg.projectId, project: cfg.projectId, fullPath: configuredPath };
+  }
+}
+
+const RELATIONS_QUERY = `
+query issueRelations($fullPath: ID!, $after: String) {
+  project(fullPath: $fullPath) {
+    workItems(first: 100, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        iid
+        widgets {
+          ... on WorkItemWidgetHierarchy {
+            parent { iid workItemType { name } }
+            children(first: 100) { nodes { iid } }
+          }
+          ... on WorkItemWidgetLinkedItems {
+            linkedItems(first: 100) { nodes { linkType workItem { iid } } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+async function graphqlFetch<T>(
+  cfg: GitLabConfig,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(`${cfg.baseUrl}/api/graphql`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.token}` },
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new GitLabError(`GitLab GraphQL エラー: HTTP ${res.status}`, res.status);
+  const body = (await res.json()) as { data?: T; errors?: { message?: string }[] };
+  if (body.errors?.length)
+    throw new GitLabError(`GitLab GraphQL エラー: ${body.errors[0]?.message ?? "unknown"}`);
+  if (!body.data) throw new GitLabError("GitLab GraphQL エラー: data がありません");
+  return body.data;
+}
+
+/** All work-item relations for the project, paginated like the REST issues
+ *  (same maxIssues budget). Degrades to an empty map on ANY failure — older
+ *  GitLab without Project.workItems / WorkItemWidgetLinkedItems (~16.3+),
+ *  query-complexity limits, unknown fullPath — the dashboard then just runs
+ *  without parent/child/related highlighting. */
+async function fetchWorkItemRelations(
+  cfg: GitLabConfig,
+  fullPath: string | null,
+): Promise<Map<number, IssueRelations>> {
+  if (!fullPath) return new Map();
+  try {
+    const nodes: GqlWorkItemNode[] = [];
+    let after: string | null = null;
+    const maxPages = Math.ceil(cfg.maxIssues / 100);
+    for (let page = 0; page < maxPages; page++) {
+      type Data = {
+        project: {
+          workItems: {
+            pageInfo: { hasNextPage: boolean; endCursor: string | null };
+            nodes: GqlWorkItemNode[];
+          } | null;
+        } | null;
+      };
+      // explicit annotation — inference would cycle through the loop-carried
+      // `after` narrowing (data -> wi -> after -> data) and trip TS7022
+      const data: Data = await graphqlFetch<Data>(cfg, RELATIONS_QUERY, { fullPath, after });
+      const wi = data.project?.workItems;
+      if (!wi) break;
+      nodes.push(...(wi.nodes ?? []));
+      if (!wi.pageInfo?.hasNextPage || !wi.pageInfo.endCursor) break;
+      after = wi.pageInfo.endCursor;
+    }
+    return mapWorkItemRelations(nodes);
+  } catch {
+    return new Map();
   }
 }
 
@@ -241,17 +394,21 @@ async function fetchRepoMeta(cfg: GitLabConfig): Promise<{ repo: string; project
 async function fetchFresh(env?: Env): Promise<ApiResponse> {
   const cfg = getConfig(env);
   const now = Date.now();
-  const [raw, meta, rawMs] = await Promise.all([
+  // relations need the project fullPath from meta first; issues/milestones
+  // still run fully in parallel with that meta -> relations chain.
+  const metaP = fetchRepoMeta(cfg);
+  const [raw, meta, rawMs, relations] = await Promise.all([
     fetchAllRawIssues(cfg),
-    fetchRepoMeta(cfg),
+    metaP,
     fetchMilestones(cfg),
+    metaP.then((m) => fetchWorkItemRelations(cfg, m.fullPath)),
   ]);
   return {
     repo: meta.repo,
     project: meta.project,
     asOf: new Date(now).toISOString().slice(0, 10),
     fetchedAt: new Date(now).toISOString(),
-    issues: raw.map((r) => mapIssue(r, now, cfg.checkpointLabel)),
+    issues: raw.map((r) => mapIssue(r, now, cfg.checkpointLabel, relations.get(r.iid))),
     milestones: rawMs.map(mapMilestone),
     checkpointLabel: cfg.checkpointLabel,
   };

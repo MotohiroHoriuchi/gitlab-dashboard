@@ -4,7 +4,7 @@
 // connection. Safe to delete this file (and the guarded branch in the route)
 // once real credentials are available.
 
-import type { ApiResponse, Issue, Milestone } from "./types";
+import type { ApiResponse, Issue, Milestone, RelatedRef } from "./types";
 
 const DAY = 86_400_000;
 const daysBetween = (aIso: string, bMs: number) =>
@@ -23,6 +23,9 @@ interface Seed {
   assignee?: string;
   milestone?: string;
   isCheckpoint?: boolean;
+  parentIid?: number | null;
+  childIids?: number[];
+  related?: RelatedRef[];
 }
 
 function toIssue(s: Seed, now: number): Issue {
@@ -52,25 +55,34 @@ function toIssue(s: Seed, now: number): Issue {
     startDate: s.startDate ?? null,
     labelNames,
     isCheckpoint: !!s.isCheckpoint,
+    parentIid: s.parentIid ?? null,
+    childIids: s.childIids ?? [],
+    related: s.related ?? [],
   };
 }
 
 const SEEDS: Seed[] = [
-  { id: 101, title: "API設計", labelName: "design", color: "108 182 255", createdAt: "2026-06-28", dueDate: "2026-07-08", milestone: "Sprint 12" },
-  { id: 102, title: "認証実装", labelName: "backend", color: "0 217 146", createdAt: "2026-07-02", dueDate: "2026-07-14", assignee: "鈴木 花子", milestone: "Sprint 12" },
+  // 親子: #101 は childIids で #141 だけを知り、#142 は parentIid 側だけを持つ
+  // → buildRelationIndex の双方向補完でどちらも親子として繋がる検証データ
+  { id: 101, title: "API設計", labelName: "design", color: "108 182 255", createdAt: "2026-06-28", dueDate: "2026-07-08", milestone: "Sprint 12", childIids: [141] },
+  { id: 102, title: "認証実装", labelName: "backend", color: "0 217 146", createdAt: "2026-07-02", dueDate: "2026-07-14", assignee: "鈴木 花子", milestone: "Sprint 12", related: [{ iid: 106, linkType: "relates_to" }] },
   { id: 103, title: "レビュー対応（期限内完了）", labelName: "bug", color: "248 81 73", createdAt: "2026-07-01", dueDate: "2026-07-08", closedAt: "2026-07-06", milestone: "Sprint 12" },
   { id: 104, title: "調査タスク（期限なし＝当日まで）", labelName: "ops", color: "210 153 34", createdAt: "2026-06-20", assignee: "佐藤 玲", milestone: "Backlog" },
   { id: 105, title: "リリース判定", labelName: "gate", color: "176 131 240", createdAt: "2026-07-09", dueDate: "2026-07-15", isCheckpoint: true, milestone: "Sprint 12" },
-  { id: 106, title: "重なりタスクA", labelName: "frontend", color: "255 166 87", createdAt: "2026-07-03", dueDate: "2026-07-12", assignee: "鈴木 花子" },
-  { id: 107, title: "重なりタスクB", labelName: "infra", color: "87 171 90", createdAt: "2026-07-04", dueDate: "2026-07-18" },
+  { id: 106, title: "重なりタスクA", labelName: "frontend", color: "255 166 87", createdAt: "2026-07-03", dueDate: "2026-07-12", assignee: "鈴木 花子", related: [{ iid: 102, linkType: "relates_to" }] },
+  // #107 → #115 は片方向 relates_to のみ → 対称化の検証データ
+  { id: 107, title: "重なりタスクB", labelName: "infra", color: "87 171 90", createdAt: "2026-07-04", dueDate: "2026-07-18", related: [{ iid: 115, linkType: "relates_to" }] },
   { id: 108, title: "スプリント作業（iteration開始日）", labelName: "backend", color: "0 217 146", createdAt: "2026-06-10", startDate: "2026-07-06", dueDate: "2026-07-13", assignee: "佐藤 玲", milestone: "Sprint 12" },
   { id: 109, title: "画面実装（遅延クローズ）", labelName: "frontend", color: "255 166 87", createdAt: "2026-07-02", dueDate: "2026-07-06", closedAt: "2026-07-10", assignee: "田中 一郎", milestone: "Sprint 12" },
-  { id: 110, title: "データ移行（期限超過・進行中）", labelName: "backend", color: "0 217 146", createdAt: "2026-06-24", dueDate: "2026-06-29", assignee: "佐藤 玲", milestone: "Sprint 12" },
+  { id: 110, title: "データ移行（期限超過・進行中）", labelName: "backend", color: "0 217 146", createdAt: "2026-06-24", dueDate: "2026-06-29", assignee: "佐藤 玲", milestone: "Sprint 12", related: [{ iid: 112, linkType: "blocks" }] },
   { id: 111, title: "ドキュメント整備（期限どおり完了）", labelName: "docs", color: "108 182 255", createdAt: "2026-06-30", dueDate: "2026-07-03", closedAt: "2026-07-03", assignee: "田中 一郎", milestone: "Sprint 12" },
-  { id: 112, title: "当日締切タスク（本日期限）", labelName: "ops", color: "210 153 34", createdAt: "2026-06-27", dueDate: "2026-07-01", assignee: "鈴木 花子", milestone: "Sprint 12" },
+  { id: 112, title: "当日締切タスク（本日期限）", labelName: "ops", color: "210 153 34", createdAt: "2026-06-27", dueDate: "2026-07-01", assignee: "鈴木 花子", milestone: "Sprint 12", related: [{ iid: 110, linkType: "is_blocked_by" }] },
   { id: 113, title: "セキュリティ点検（CP・期限超過）", labelName: "gate", color: "176 131 240", createdAt: "2026-06-23", dueDate: "2026-06-28", isCheckpoint: true, assignee: "佐藤 玲", milestone: "Sprint 12" },
   { id: 114, title: "複合ラベル・未割当タスク", labelName: "frontend", color: "255 166 87", extraLabels: ["design", "ux"], createdAt: "2026-07-01", dueDate: "2026-07-09", assignee: "未割当", milestone: "Sprint 12" },
   { id: 115, title: "開始日あり・期限なし", labelName: "infra", color: "87 171 90", createdAt: "2026-06-15", startDate: "2026-06-30", assignee: "佐藤 玲", milestone: "Backlog" },
+  // ── #101 の子タスク（work item 階層）。クリックフォーカスの親子強調の検証用
+  { id: 141, title: "子タスク: エンドポイント定義", labelName: "design", color: "108 182 255", createdAt: "2026-07-02", startDate: "2026-07-02", dueDate: "2026-07-06", assignee: "鈴木 花子", milestone: "Sprint 12", parentIid: 101 },
+  { id: 142, title: "子タスク: スキーマ定義", labelName: "design", color: "108 182 255", createdAt: "2026-07-05", startDate: "2026-07-05", dueDate: "2026-07-09", milestone: "Sprint 12", parentIid: 101 },
 
   // ── 過去スプリントの完了 Issue（Close 日数の分布＝箱ひげを意味あるものにするための母数）。
   //    完了日はすべて 6/23 以前 → 現在のカレンダー窓（今日=7/1 付近の月/2週）には出ない。

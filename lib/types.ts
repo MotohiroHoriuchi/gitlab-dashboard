@@ -8,6 +8,14 @@ export interface IssueLabel {
   color: string;
 }
 
+/** GitLab linked-item link type. blocks / is_blocked_by only exist on
+ *  Premium+; free tier always sends relates_to. */
+export type LinkType = "relates_to" | "blocks" | "is_blocked_by";
+export interface RelatedRef {
+  iid: number;
+  linkType: LinkType;
+}
+
 /** Normalized issue shape the frontend renders/aggregates against. Produced by
  *  the backend from the GitLab REST API (see lib/gitlab.ts). */
 export interface Issue {
@@ -27,6 +35,12 @@ export interface Issue {
   startDate: string | null; // "YYYY-MM-DD" — issue start_date, else iteration.start_date, else null
   labelNames: string[]; // ALL label names (checkpoint detection; pickLabel keeps only the first)
   isCheckpoint: boolean; // labelNames includes the configured checkpoint label
+  // Work-item relations (GraphQL, lib/gitlab.ts). Empty when the instance
+  // doesn't support the query — the calendar click-focus then only knows
+  // milestone membership.
+  parentIid: number | null; // hierarchy parent issue iid (Epic parents are dropped)
+  childIids: number[]; // hierarchy children (tasks)
+  related: RelatedRef[]; // linked items
 }
 
 /** A GitLab milestone reduced to what the timeline needs. */

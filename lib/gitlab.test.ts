@@ -2,12 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   mapIssue,
   mapMilestone,
+  mapWorkItemRelations,
   pickLabel,
   labelNamesOf,
   hexToRgbTriple,
   getConfig,
   ConfigError,
   type GitLabIssue,
+  type GqlWorkItemNode,
 } from "./gitlab";
 
 const DAY = 86_400_000;
@@ -72,7 +74,33 @@ describe("mapIssue", () => {
       startDate: null,
       labelNames: ["tech-debt"],
       isCheckpoint: false,
+      parentIid: null,
+      childIids: [],
+      related: [],
     });
+  });
+
+  it("attaches work-item relations when provided, defaults to none", () => {
+    const raw: GitLabIssue = {
+      iid: 8,
+      title: "with relations",
+      state: "opened",
+      created_at: daysAgo(3),
+      closed_at: null,
+    };
+    const rel = {
+      parentIid: 3,
+      childIids: [9, 10],
+      related: [{ iid: 11, linkType: "relates_to" as const }],
+    };
+    const m = mapIssue(raw, NOW, "checkpoint", rel);
+    expect(m.parentIid).toBe(3);
+    expect(m.childIids).toEqual([9, 10]);
+    expect(m.related).toEqual([{ iid: 11, linkType: "relates_to" }]);
+    const bare = mapIssue(raw, NOW);
+    expect(bare.parentIid).toBeNull();
+    expect(bare.childIids).toEqual([]);
+    expect(bare.related).toEqual([]);
   });
 
   it("maps a closed issue: linger = closed-created, closedAgo set", () => {
@@ -205,6 +233,75 @@ describe("mapMilestone", () => {
     expect(m.closedAgo).toBeNull();
     expect(m.assignee).toBe("未割当");
     expect(m.label).toEqual({ name: "未分類", color: "110 118 129" });
+  });
+});
+
+describe("mapWorkItemRelations", () => {
+  it("joins hierarchy + linked items across widgets, coercing string iids", () => {
+    const nodes: GqlWorkItemNode[] = [
+      {
+        iid: "5",
+        widgets: [
+          {}, // widgets we don't fragment on come back empty
+          {
+            parent: { iid: "3", workItemType: { name: "Issue" } },
+            children: { nodes: [{ iid: "9" }, { iid: "10" }] },
+          },
+          { linkedItems: { nodes: [{ linkType: "blocks", workItem: { iid: "11" } }] } },
+        ],
+      },
+    ];
+    const m = mapWorkItemRelations(nodes);
+    expect(m.get(5)).toEqual({
+      parentIid: 3,
+      childIids: [9, 10],
+      related: [{ iid: 11, linkType: "blocks" }],
+    });
+  });
+
+  it("drops Epic parents (different iid namespace would falsely link)", () => {
+    const nodes: GqlWorkItemNode[] = [
+      { iid: "5", widgets: [{ parent: { iid: "7", workItemType: { name: "Epic" } }, children: { nodes: [{ iid: "6" }] } }] },
+    ];
+    expect(mapWorkItemRelations(nodes).get(5)!.parentIid).toBeNull();
+  });
+
+  it("normalizes unknown link types to relates_to (and BLOCKED_BY variants)", () => {
+    const nodes: GqlWorkItemNode[] = [
+      {
+        iid: "1",
+        widgets: [
+          {
+            linkedItems: {
+              nodes: [
+                { linkType: "IS_BLOCKED_BY", workItem: { iid: "2" } },
+                { linkType: "blocked_by", workItem: { iid: "3" } },
+                { linkType: "something_new", workItem: { iid: "4" } },
+                { linkType: null, workItem: { iid: "5" } },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+    const rel = mapWorkItemRelations(nodes).get(1)!;
+    expect(rel.related).toEqual([
+      { iid: 2, linkType: "is_blocked_by" },
+      { iid: 3, linkType: "is_blocked_by" },
+      { iid: 4, linkType: "relates_to" },
+      { iid: 5, linkType: "relates_to" },
+    ]);
+  });
+
+  it("skips relation-less nodes, malformed iids, and missing widgets", () => {
+    const nodes: GqlWorkItemNode[] = [
+      { iid: "1", widgets: [{}] }, // no relations -> not in the map
+      { iid: "abc", widgets: [{ children: { nodes: [{ iid: "2" }] } }] }, // bad own iid
+      { iid: "3" }, // widgets absent
+      { iid: "4", widgets: [{ children: { nodes: [{ iid: "xyz" }, null] } }] }, // bad child iids
+    ];
+    const m = mapWorkItemRelations(nodes);
+    expect(m.size).toBe(0);
   });
 });
 

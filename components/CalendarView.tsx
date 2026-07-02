@@ -6,10 +6,17 @@ import {
   SANS,
   S,
   T,
+  calBarKey,
+  chipSelectionRole,
+  relBadgeStyle,
+  relBadgeText,
   rgb,
   rgba,
+  selectionOverlay,
+  selectionRole,
   toneColor,
   type CalDayItem,
+  type CalRelIndex,
   type CalSegment,
   type CalTip,
   type CalVals,
@@ -25,6 +32,10 @@ type DayState = { dayLabel: string; items: CalDayItem[]; x: number; y: number } 
 export default function CalendarView({ cal }: { cal: CalVals }) {
   const [hover, setHover] = useState<HoverState>(null);
   const [day, setDay] = useState<DayState>(null);
+  // click-focus: "track:id" of the selected bar (highlights its relations,
+  // dims the rest). A plain key string, so it survives the 60s polling
+  // re-render — the view model is rebuilt but the selection stays.
+  const [selected, setSelected] = useState<string | null>(null);
   const [sparkle, setSparkle] = useState(0); // bump to replay the checkpoint-star shine
 
   // One-shot: drop back to 0 once the 3s animations finish. While sparkle is
@@ -51,6 +62,32 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [day]);
+
+  // clear the click-focus selection on outside click / Escape. Mousedown on a
+  // bar is ignored (its own onClick toggles, else re-clicking the selected bar
+  // would clear-then-reselect), as is the popover (rows focus via onClick).
+  // While the popover is open, Escape closes it first (listener above); the
+  // next Escape clears the selection.
+  useEffect(() => {
+    if (!selected) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest?.("[data-calbar]")) return;
+      if (dayRef.current?.contains(t)) return;
+      setSelected(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !day) setSelected(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [selected, day]);
+
+  const toggleSelect = (key: string) => setSelected((p) => (p === key ? null : key));
 
   // position/z-index lift the text above the overrun hatch / duetick overlays,
   // which are later siblings on the same grid cell (they must cover the bar's
@@ -199,27 +236,64 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
           </div>
           <div style={week.gridStyle}>
             {week.todayStripStyle && <div style={week.todayStripStyle} />}
-            {week.segments.map((s) =>
-              s.kind === "overflow" ? (
+            {week.segments.map((s) => {
+              if (s.kind === "overflow") {
+                // rings when a hidden item relates to the selection (the chip
+                // is its only visible stand-in), dims when none does.
+                // data-calbar keeps opening it from clearing the selection.
+                const chipRole = chipSelectionRole(selected, cal.relations, s.items ?? []);
+                return (
+                  <div
+                    key={segKey(s.key)}
+                    data-calbar
+                    style={{ ...s.style, ...dimAnim, ...selectionOverlay(chipRole) }}
+                    onClick={(e) => openDay(e, s)}
+                    title="この日の予定をすべて表示"
+                  >
+                    {s.overflowLabel} ▾
+                  </div>
+                );
+              }
+              const role = selectionRole(selected, cal.relations, s.track, s.id);
+              if (s.kind === "overrun" || s.kind === "duetick") {
+                // schedule-overrun hatch / plan tick — non-interactive overlay;
+                // dims with its bar but never carries the focus ring itself.
+                return (
+                  <div
+                    key={segKey(s.key)}
+                    style={{
+                      ...s.style,
+                      ...dimAnim,
+                      ...(role === "dim" ? selectionOverlay("dim") : {}),
+                    }}
+                  />
+                );
+              }
+              const badge = relBadgeText(role);
+              return (
                 <div
                   key={segKey(s.key)}
-                  style={{ ...s.style, ...dimAnim }}
-                  onClick={(e) => openDay(e, s)}
-                  title="この日の予定をすべて表示"
-                >
-                  {s.overflowLabel} ▾
-                </div>
-              ) : s.kind === "overrun" || s.kind === "duetick" ? (
-                // schedule-overrun hatch / plan tick — non-interactive overlay
-                <div key={segKey(s.key)} style={{ ...s.style, ...dimAnim }} />
-              ) : (
-                <div
-                  key={segKey(s.key)}
-                  style={{ ...s.style, ...(s.isCheckpoint ? cpGlow : dimAnim) }}
+                  data-calbar
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={role === "self"}
+                  style={{
+                    ...s.style,
+                    ...(s.isCheckpoint ? cpGlow : dimAnim),
+                    ...selectionOverlay(role, s.style.boxShadow as string | undefined),
+                  }}
+                  onClick={() => toggleSelect(calBarKey(s.track, s.id))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSelect(calBarKey(s.track, s.id));
+                    }
+                  }}
                   onMouseEnter={(e) => s.tip && showTip(e, s.tip)}
                   onMouseMove={(e) => s.tip && showTip(e, s.tip)}
                   onMouseLeave={() => setHover(null)}
                 >
+                  {s.showLabel && badge && <span style={relBadgeStyle}>{badge}</span>}
                   {s.showLabel && <span style={labelStyle}>{s.label}</span>}
                   {s.starStyle && (
                     <span key={`${s.key}-star-${sparkle}`} style={{ ...s.starStyle, ...sparkleAnim }}>
@@ -227,8 +301,8 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
                     </span>
                   )}
                 </div>
-              ),
-            )}
+              );
+            })}
           </div>
         </div>
       ))}
@@ -240,7 +314,19 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
       )}
 
       {hover && <BarTooltip hover={hover} />}
-      {day && <DayPopover day={day} innerRef={dayRef} onClose={() => setDay(null)} />}
+      {day && (
+        <DayPopover
+          day={day}
+          innerRef={dayRef}
+          onClose={() => setDay(null)}
+          selected={selected}
+          relations={cal.relations}
+          onFocus={(key) => {
+            setSelected(key);
+            setDay(null);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -321,10 +407,16 @@ function DayPopover({
   day,
   innerRef,
   onClose,
+  selected,
+  relations,
+  onFocus,
 }: {
   day: NonNullable<DayState>;
   innerRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
+  selected: string | null;
+  relations: CalRelIndex;
+  onFocus: (key: string) => void;
 }) {
   const { left, top } = useViewportClamp(innerRef, day.x, day.y);
   const box: CSSProperties = {
@@ -364,39 +456,70 @@ function DayPopover({
         </button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-        {day.items.map((it, i) => (
-          <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-            <span style={{ ...dot(it.color), marginTop: "4px" }} />
-            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <span
-                  style={{
-                    minWidth: 0,
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: rgb(T.body),
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {it.track === "issue" ? `#${it.id} ${it.title}` : it.title}
-                </span>
-                {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "11px" }}>★</span>}
-              </div>
-              <div style={{ marginTop: "2px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
-                <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
-                {metaRest(it) && <span> · {metaRest(it)}</span>}
-                {it.varianceLabel && (
-                  <span style={{ color: rgb(toneColor(it.varianceTone)), fontWeight: 600 }}>
-                    {" · "}
-                    {it.varianceLabel}
+        {day.items.map((it, i) => {
+          const role = selectionRole(selected, relations, it.track, it.id);
+          const badge = relBadgeText(role);
+          return (
+            <div
+              key={i}
+              role="button"
+              tabIndex={0}
+              title="クリックでカレンダー上の関係を強調"
+              style={{
+                display: "flex",
+                gap: "8px",
+                alignItems: "flex-start",
+                cursor: "pointer",
+                opacity: role === "dim" ? 0.45 : 1,
+              }}
+              onClick={() => onFocus(calBarKey(it.track, it.id))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onFocus(calBarKey(it.track, it.id));
+                }
+              }}
+            >
+              <span style={{ ...dot(it.color), marginTop: "4px" }} />
+              <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  {(badge || role === "self") && (
+                    <span style={relBadgeStyle}>{badge ?? "選択中"}</span>
+                  )}
+                  <span
+                    style={{
+                      minWidth: 0,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: rgb(T.body),
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {it.track === "issue" ? `#${it.id} ${it.title}` : it.title}
                   </span>
+                  {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "11px" }}>★</span>}
+                </div>
+                <div style={{ marginTop: "2px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
+                  <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
+                  {metaRest(it) && <span> · {metaRest(it)}</span>}
+                  {it.varianceLabel && (
+                    <span style={{ color: rgb(toneColor(it.varianceTone)), fontWeight: 600 }}>
+                      {" · "}
+                      {it.varianceLabel}
+                    </span>
+                  )}
+                </div>
+                {it.relLine && (
+                  <div style={{ marginTop: "1px", fontSize: "10px", color: rgb(T.mutedSoft) }}>
+                    {it.relLine}
+                  </div>
                 )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

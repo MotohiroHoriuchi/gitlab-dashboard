@@ -4,7 +4,7 @@
 // every value/style the view binds to. No framework coupling beyond CSSProperties.
 
 import type { CSSProperties } from "react";
-import type { CalMode, DashState, Issue, LabelDef, Milestone } from "./types";
+import type { CalMode, DashState, Issue, LabelDef, Milestone, RelatedRef } from "./types";
 
 /* ------------------------------------------------------------------ *
  *  Config (were `$props` on the design component)
@@ -263,6 +263,8 @@ export interface CalDayItem {
   isCheckpoint: boolean;
   varianceLabel: string; // schedule variance ("" when not measurable)
   varianceTone: VarianceTone;
+  relLine: string; // "親 #10 · 子 #11, #13 · 関連 #15" ("" when unrelated)
+  hidden: boolean; // collapsed past the lane cap — the chip is its only stand-in
 }
 /** One clipped bar piece within a single week row. A bar crossing a week
  *  boundary yields one segment per row (isStart/isEnd flag the true ends).
@@ -328,6 +330,7 @@ export interface CalVals {
   empty: boolean;
   legend: { checkpointLabel: string };
   summary: ScheduleSummary; // 納期予実 KPIs over the filtered issue set
+  relations: CalRelIndex; // click-focus lookup: selected bar key -> related bar keys
 }
 
 export interface Vals {
@@ -965,6 +968,11 @@ interface CalItem {
   lane: number;
   variance: ScheduleVariance; // milestones: NO_VARIANCE
   dueDay: number | null; // due_date day-index (overrun hatch/tick); null if none
+  // relations (tooltip/popover listing) — issue fields; milestones keep defaults
+  parentIid: number | null;
+  childIids: number[];
+  related: RelatedRef[];
+  memberIids: number[]; // milestone only: iids of the filtered issues under it
 }
 
 const fmtMD = (idx: number): string => {
@@ -983,6 +991,41 @@ function itemStatus(it: CalItem): { status: "open" | "closed" | "milestone"; lab
   return it.isOpen ? { status: "open", label: "進行中" } : { status: "closed", label: "完了" };
 }
 
+/** "#11, #13" capped at 6 entries with an "…他N件" tail. */
+const iidList = (iids: number[]): string => {
+  const shown = iids.slice(0, 6).map((n) => `#${n}`).join(", ");
+  return iids.length > 6 ? `${shown} …他${iids.length - 6}件` : shown;
+};
+
+/** Relation display pairs for an item: ["子", "#11, #13"]…. Lists the data as
+ *  fetched — iids hidden by the current filter still show up here (the bars
+ *  only highlight what's visible; the listing states the full relations). */
+function relPairs(it: CalItem): [string, string][] {
+  const out: [string, string][] = [];
+  if (it.track === "issue") {
+    if (it.parentIid !== null) out.push(["親", `#${it.parentIid}`]);
+    if (it.childIids.length) out.push(["子", iidList(it.childIids)]);
+    const byType = [
+      ["relates_to", "関連"],
+      ["blocks", "ブロック"],
+      ["is_blocked_by", "被ブロック"],
+    ] as const;
+    for (const [type, label] of byType) {
+      const iids = it.related.filter((r) => r.linkType === type).map((r) => r.iid);
+      if (iids.length) out.push([label, iidList(iids)]);
+    }
+  } else if (it.memberIids.length) {
+    out.push(["配下", iidList(it.memberIids)]);
+  }
+  return out;
+}
+
+/** One-line relation summary for the day popover ("" when unrelated). */
+const relSummary = (it: CalItem): string =>
+  relPairs(it)
+    .map(([k, v]) => `${k} ${v}`)
+    .join(" · ");
+
 /** Rich hover tooltip for a bar. */
 function buildTip(it: CalItem): CalTip {
   const st = itemStatus(it);
@@ -993,6 +1036,7 @@ function buildTip(it: CalItem): CalTip {
   if (it.track === "issue" && it.dueDay !== null) rows.push({ k: "期限", v: fmtMD(it.dueDay) });
   if (it.variance.status !== "none")
     rows.push({ k: "予実", v: it.variance.label, tone: it.variance.tone });
+  for (const [k, v] of relPairs(it)) rows.push({ k, v });
   return {
     title: it.track === "issue" ? `#${it.id} ${it.label}` : it.label,
     labelName: it.track === "issue" ? it.labelName : null,
@@ -1002,7 +1046,7 @@ function buildTip(it: CalItem): CalTip {
 }
 
 /** One item as it appears in the day-overflow popover. */
-function toDayItem(it: CalItem): CalDayItem {
+function toDayItem(it: CalItem, hidden: boolean): CalDayItem {
   const st = itemStatus(it);
   return {
     id: it.id,
@@ -1017,6 +1061,8 @@ function toDayItem(it: CalItem): CalDayItem {
     isCheckpoint: it.isCheckpoint,
     varianceLabel: it.variance.label,
     varianceTone: it.variance.tone,
+    relLine: relSummary(it),
+    hidden,
   };
 }
 
@@ -1147,6 +1193,141 @@ export function scheduleSummary(issues: Issue[], todayIndex: number): ScheduleSu
   };
 }
 
+/* ------------------------------------------------------------------ *
+ *  Click-focus relations — clicking a bar highlights its parent/children/
+ *  linked issues/milestone and dims the rest. The index is built once per
+ *  buildCalendar; selection itself is CalendarView-local state, so focusing
+ *  never re-runs layout (styles are overlaid per render via selectionOverlay).
+ * ------------------------------------------------------------------ */
+export type CalRelKind = "parent" | "child" | "related" | "milestone" | "member";
+/** selected bar key -> related bar key -> how the target relates to the selection. */
+export type CalRelIndex = Record<string, Record<string, CalRelKind>>;
+/** Bar identity across tracks — milestone ids and issue iids can collide. */
+export const calBarKey = (track: "milestone" | "issue", id: number): string => `${track}:${id}`;
+
+/** Relation index over the *filtered* issue set + calendar milestones.
+ *  parent/child pairs are completed bidirectionally (either side's data
+ *  suffices) and related links are symmetrized; hierarchy outranks "related"
+ *  when both claim the same pair. Only issues present in the set are indexed —
+ *  relations pointing outside the current filter highlight nothing. */
+export function buildRelationIndex(issues: Issue[], milestones: Milestone[]): CalRelIndex {
+  const idx: CalRelIndex = {};
+  const present = new Set(issues.map((i) => i.id));
+  const add = (fromKey: string, toKey: string, kind: CalRelKind) => {
+    const row = (idx[fromKey] ??= {});
+    const prev = row[toKey];
+    if (prev === "parent" || prev === "child") return; // hierarchy wins over "related"
+    row[toKey] = kind;
+  };
+  const msByTitle = new Map<string, number>();
+  for (const m of milestones) msByTitle.set(m.title, m.id);
+  for (const it of issues) {
+    const iKey = calBarKey("issue", it.id);
+    const msId = msByTitle.get(it.milestone); // "Backlog" has no bar -> undefined
+    if (msId !== undefined) {
+      const mKey = calBarKey("milestone", msId);
+      add(iKey, mKey, "milestone");
+      add(mKey, iKey, "member");
+    }
+    if (it.parentIid !== null && present.has(it.parentIid)) {
+      add(iKey, calBarKey("issue", it.parentIid), "parent");
+      add(calBarKey("issue", it.parentIid), iKey, "child");
+    }
+    for (const c of it.childIids) {
+      if (!present.has(c)) continue;
+      add(iKey, calBarKey("issue", c), "child");
+      add(calBarKey("issue", c), iKey, "parent");
+    }
+    for (const r of it.related) {
+      if (!present.has(r.iid)) continue;
+      add(iKey, calBarKey("issue", r.iid), "related");
+      add(calBarKey("issue", r.iid), iKey, "related");
+    }
+  }
+  return idx;
+}
+
+/** A bar's role under the current selection: the selection itself, one of its
+ *  relations, or dimmed. null = no selection (bar renders exactly as today). */
+export type CalRole = CalRelKind | "self" | "dim" | null;
+export function selectionRole(
+  selected: string | null,
+  rel: CalRelIndex,
+  track: "milestone" | "issue",
+  id: number,
+): CalRole {
+  if (!selected) return null;
+  const key = calBarKey(track, id);
+  if (key === selected) return "self";
+  return rel[selected]?.[key] ?? "dim";
+}
+
+/** Focus role for a "+N件" overflow chip: ring when the chip is the only
+ *  stand-in for the selection or one of its relations — i.e. a *hidden* item
+ *  matches. Visible covering items (the popover lists those too) don't count:
+ *  the milestone bar alone would otherwise ring every chip under it. */
+export function chipSelectionRole(
+  selected: string | null,
+  rel: CalRelIndex,
+  items: { track: "milestone" | "issue"; id: number; hidden: boolean }[],
+): CalRole {
+  if (!selected) return null;
+  return items.some((it) => it.hidden && selectionRole(selected, rel, it.track, it.id) !== "dim")
+    ? "related"
+    : "dim";
+}
+
+const FOCUS_TRANSITION = "opacity .18s ease, box-shadow .18s ease";
+/** Style overlaid on a bar's precomputed style for its selection role.
+ *  {} when there is no selection — the default rendering stays byte-identical.
+ *  Rings are *prepended* to the base boxShadow so the checkpoint gold ring
+ *  survives underneath. Fade-in comes from the transition (box-shadow/opacity
+ *  animate from their previous computed values); deselect snaps back. */
+export function selectionOverlay(role: CalRole, baseBoxShadow?: string): CSSProperties {
+  if (role === null) return {};
+  if (role === "dim") return { transition: FOCUS_TRANSITION, opacity: 0.22 };
+  const ring =
+    role === "self"
+      ? `0 0 0 2px ${rgb(T.ink)}, 0 0 12px ${rgba(T.ink, 0.35)}`
+      : `0 0 0 1.5px ${rgba(T.ink, 0.55)}`;
+  return {
+    transition: FOCUS_TRANSITION,
+    boxShadow: baseBoxShadow ? `${ring}, ${baseBoxShadow}` : ring,
+  };
+}
+
+/** Badge text shown on highlighted bars while something is selected. */
+export function relBadgeText(role: CalRole): string | null {
+  switch (role) {
+    case "parent":
+      return "親";
+    case "child":
+      return "子";
+    case "related":
+      return "関連";
+    case "milestone":
+      return "MS";
+    case "member":
+      return "配下";
+    default:
+      return null;
+  }
+}
+/** position/z-index lift matches the bar label (above the overrun hatch). */
+export const relBadgeStyle: CSSProperties = {
+  flex: "0 0 auto",
+  padding: "2px 4px",
+  borderRadius: "3px",
+  fontSize: "9px",
+  fontWeight: 700,
+  lineHeight: 1,
+  background: rgb(T.strong),
+  color: rgb(T.ink),
+  border: "1px solid " + rgba(T.hairline, 0.9),
+  position: "relative",
+  zIndex: 1,
+};
+
 /** Precomputed bar style. Left/right corners round only on the true start/end
  *  row so a wrapped bar reads as one continuous span. */
 function barStyle(
@@ -1179,7 +1360,7 @@ function barStyle(
     borderRadius: `${rL} ${rR} ${rR} ${rL}`,
     color: rgb(T.ink),
     textShadow: "0 1px 2px rgb(0 0 0 / .55)",
-    cursor: "default",
+    cursor: "pointer", // click-focus: highlight relations, dim the rest
   };
   if (it.track === "milestone") {
     s.background = rgba(c, 0.2);
@@ -1293,6 +1474,12 @@ export function buildCalendar(
   };
 
   // ── milestones -> intervals ──
+  const membersByTitle = new Map<string, number[]>(); // milestone title -> filtered issue iids
+  for (const it of issues) {
+    const arr = membersByTitle.get(it.milestone);
+    if (arr) arr.push(it.id);
+    else membersByTitle.set(it.milestone, [it.id]);
+  }
   const mItemsAll: CalItem[] = [];
   for (const m of milestones) {
     const s = m.startDate ? dayIndex(m.startDate) : null;
@@ -1317,6 +1504,10 @@ export function buildCalendar(
       lane: 0,
       variance: NO_VARIANCE,
       dueDay: null,
+      parentIid: null,
+      childIids: [],
+      related: [],
+      memberIids: membersByTitle.get(m.title) ?? [],
     });
   }
 
@@ -1340,6 +1531,10 @@ export function buildCalendar(
       lane: 0,
       variance: scheduleVariance(it, todayIndex),
       dueDay: it.dueDate ? dayIndex(it.dueDate) : null,
+      parentIid: it.parentIid,
+      childIids: it.childIids,
+      related: it.related,
+      memberIids: [],
     });
   }
 
@@ -1525,10 +1720,13 @@ export function buildCalendar(
       const hidden = regItems.filter((it) => it.lane >= maxLanes && covers(it, d)).length;
       if (hidden === 0) continue;
       const items: CalDayItem[] = [
-        ...mItems.filter((it) => covers(it, d)),
-        ...cpItems.filter((it) => covers(it, d)),
-        ...regItems.filter((it) => covers(it, d)).sort((a, b) => a.lane - b.lane),
-      ].map(toDayItem);
+        ...mItems.filter((it) => covers(it, d)).map((it) => toDayItem(it, false)),
+        ...cpItems.filter((it) => covers(it, d)).map((it) => toDayItem(it, false)),
+        ...regItems
+          .filter((it) => covers(it, d))
+          .sort((a, b) => a.lane - b.lane)
+          .map((it) => toDayItem(it, it.lane >= maxLanes)),
+      ];
       laneCount = Math.max(laneCount, overflowRow);
       segments.push({
         key: `overflow-${d}-r${r}`,
@@ -1647,5 +1845,6 @@ export function buildCalendar(
     empty: mItems.length === 0 && iItems.length === 0,
     legend: { checkpointLabel },
     summary: scheduleSummary(issues, todayIndex),
+    relations: buildRelationIndex(issues, milestones),
   };
 }
