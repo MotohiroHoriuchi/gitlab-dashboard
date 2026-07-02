@@ -66,7 +66,7 @@ npm run dev                   # → http://localhost:48273
 
 トークンは **サーバ側（Route Handler）でのみ** 使い、ブラウザには出しません。
 
-GitLab 応答は 60 秒キャッシュ。Docker での起動は下記「詳細」を参照。
+画面は 60 秒ごとに自動更新（GitLab 応答も 60 秒キャッシュ）。Docker での起動は下記「詳細」を参照。
 
 ## 詳細
 
@@ -82,7 +82,7 @@ Browser ─▶ Next.js(:48273)
 
 - **GitLab トークンはサーバ側（Route Handler）でのみ使用**し、ブラウザへ露出しない。
 - バックエンドは生 Issue＋マイルストーンを1回配信、集計はクライアント（クリックごとの往復なし）。
-- GitLab 応答は 60 秒キャッシュ（Next の `revalidate`）。
+- 画面は 60 秒ポーリングで自動更新。GitLab 応答はサーバ内 TTL キャッシュ（60 秒、複数タブでも上流取得は1本）。
 - 技術スタック: Next.js 16（App Router）/ React 19 / TypeScript。チャートライブラリは不使用（自前の CSS 描画）。
 
 </details>

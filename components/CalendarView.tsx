@@ -14,6 +14,7 @@ import {
   type CalTip,
   type CalVals,
 } from "@/lib/logic";
+import { useViewportClamp } from "@/components/useViewportClamp";
 
 type HoverState = { tip: CalTip; x: number; y: number } | null;
 type DayState = { dayLabel: string; items: CalDayItem[]; x: number; y: number } | null;
@@ -42,8 +43,11 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
     };
   }, [day]);
 
+  // position/z-index lift the text above the overrun hatch / duetick overlays,
+  // which are later siblings on the same grid cell (they must cover the bar's
+  // background but not its text).
   const labelStyle = S(
-    "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;",
+    "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
     "padding:2px 6px 5px; font-size:10px; font-weight:600; letter-spacing:.04em; color:rgb(110 118 129);",
@@ -56,16 +60,14 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
   const starWrap: CSSProperties = { color: rgb("255 199 74"), fontSize: "12px", ...sparkleAnim };
   const segKey = (k: string) => (sparkle ? `${k}-${sparkle}` : k);
 
+  // Raw cursor-offset coordinates only — viewport clamping happens inside the
+  // overlay components via useViewportClamp, against their measured size.
   const showTip = (e: React.MouseEvent, tip: CalTip) => {
-    const x = Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 252));
-    const y = Math.max(8, Math.min(e.clientY + 14, window.innerHeight - 150));
-    setHover({ tip, x, y });
+    setHover({ tip, x: e.clientX + 14, y: e.clientY + 14 });
   };
   const openDay = (e: React.MouseEvent, s: CalSegment) => {
     e.stopPropagation();
-    const x = Math.max(8, Math.min(e.clientX + 10, window.innerWidth - 320));
-    const y = Math.max(8, Math.min(e.clientY + 10, window.innerHeight - 340));
-    setDay({ dayLabel: s.dayLabel ?? "", items: s.items ?? [], x, y });
+    setDay({ dayLabel: s.dayLabel ?? "", items: s.items ?? [], x: e.clientX + 10, y: e.clientY + 10 });
   };
 
   return (
@@ -220,10 +222,12 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
 /* ── hover tooltip for a single bar ── */
 function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
   const { tip, x, y } = hover;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const { left, top } = useViewportClamp(boxRef, x, y);
   const box: CSSProperties = {
     position: "fixed",
-    left: x,
-    top: y,
+    left,
+    top,
     zIndex: 60,
     pointerEvents: "none",
     minWidth: "160px",
@@ -236,7 +240,7 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
     fontFamily: SANS,
   };
   return (
-    <div style={box}>
+    <div ref={boxRef} style={box}>
       <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "6px" }}>
         <span style={dot(tip.color)} />
         <span
@@ -296,10 +300,11 @@ function DayPopover({
   innerRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
 }) {
+  const { left, top } = useViewportClamp(innerRef, day.x, day.y);
   const box: CSSProperties = {
     position: "fixed",
-    left: day.x,
-    top: day.y,
+    left,
+    top,
     zIndex: 70,
     width: "300px",
     maxHeight: "340px",

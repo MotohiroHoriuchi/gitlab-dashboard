@@ -1313,6 +1313,11 @@ export function buildCalendar(
       const colSpan = segEnd - segStart + 1;
       const isStart = it.startDay >= rowStart;
       const isEnd = it.endDay <= rowEnd;
+      // Label goes on the first row rendered inside the window — the true
+      // start row, or the left-clipped row when the bar starts before the
+      // window ("…" marks the clip; a bar keyed to its off-screen start row
+      // would otherwise never get a label).
+      const labelHere = segStart === Math.max(it.startDay, winStart);
       const gridRowStart = laneOffset + it.lane + 1;
       laneCount = Math.max(laneCount, gridRowStart);
       const s: CalSegment = {
@@ -1320,8 +1325,8 @@ export function buildCalendar(
         kind: "bar",
         track: it.track,
         id: it.id,
-        label: it.label,
-        showLabel: isStart,
+        label: labelHere && !isStart ? `…${it.label}` : it.label,
+        showLabel: labelHere,
         meta: it.meta,
         colStart,
         colSpan,
@@ -1338,6 +1343,9 @@ export function buildCalendar(
           lineHeight: 1,
           color: rgb(CHECKPOINT_STAR),
           textShadow: "0 0 6px " + rgba(CHECKPOINT_STAR, 0.9),
+          // above the overrun hatch overlay (same grid cell, later sibling)
+          position: "relative",
+          zIndex: 1,
         };
       }
       segments.push(s);

@@ -38,20 +38,44 @@ export default function Dashboard() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/issues")
-      .then(async (r) => {
+    let busy = false; // skip a tick while the previous fetch is still running
+    const load = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const r = await fetch("/api/issues");
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
-        return j as ApiResponse;
-      })
-      .then((j) => alive && setData(j))
-      .catch((e: unknown) => alive && setError(e instanceof Error ? e.message : String(e)));
+        if (alive) {
+          setData(j as ApiResponse);
+          setError(null);
+        }
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        busy = false;
+      }
+    };
+    load();
+    // 60s polling, matching the server-side TTL. Hidden tabs skip ticks and
+    // refresh immediately on return — the server cache absorbs the extra hit.
+    const id = setInterval(() => {
+      if (!document.hidden) void load();
+    }, 60_000);
+    const onVis = () => {
+      if (!document.hidden) void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       alive = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
-  if (error) {
+  // Full error screen only when there is nothing to show; a failed poll keeps
+  // rendering the last good payload.
+  if (error && !data) {
     return (
       <Screen>
         <div>
@@ -99,7 +123,7 @@ export default function Dashboard() {
             <span style={S("font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>GitLab Issue Analytics</span>
           </div>
           <h1 style={S("margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;")}>{v.project}</h1>
-          <div style={S("font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{v.repo} · {v.asOf} 時点</div>
+          <div style={S("font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{v.repo} · {v.asOf} 時点 · 最終更新 {new Date(data.fetchedAt).toLocaleTimeString("ja-JP")}</div>
         </div>
         <div style={S("text-align:right;")}>
           <div style={S("font-size:11px; color:rgb(110 118 129); text-transform:uppercase; letter-spacing:.09em; font-weight:600;")}>総イシュー</div>

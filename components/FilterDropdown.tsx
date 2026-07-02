@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MONO, SANS, T, rgb, rgba, type FilterOption } from "@/lib/logic";
 
 /** Compact, searchable multi-select filter. Scales to many labels/assignees
@@ -18,7 +18,9 @@ export default function FilterDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [flip, setFlip] = useState({ right: false, up: false });
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   // close on outside click
   useEffect(() => {
@@ -33,6 +35,23 @@ export default function FilterDropdown({
   const q = query.trim().toLowerCase();
   const shown = q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
   const active = selectedCount > 0;
+
+  // Flip away from viewport edges. Decided from the trigger's rect + the
+  // popup's measured size (size is side-independent, so a stale flip from a
+  // previous open can't skew the measurement). Re-runs as the filtered list
+  // resizes the popup. useLayoutEffect: corrected before paint.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const wrap = ref.current;
+    const pop = popRef.current;
+    if (!wrap || !pop) return;
+    const anchor = wrap.getBoundingClientRect();
+    const { width, height } = pop.getBoundingClientRect();
+    setFlip({
+      right: anchor.left + width > window.innerWidth - 8,
+      up: anchor.bottom + 6 + height > window.innerHeight - 8,
+    });
+  }, [open, shown.length, active]);
 
   const trigger: CSSProperties = {
     display: "inline-flex",
@@ -65,8 +84,8 @@ export default function FilterDropdown({
   };
   const pop: CSSProperties = {
     position: "absolute",
-    top: "calc(100% + 6px)",
-    left: 0,
+    ...(flip.up ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
+    ...(flip.right ? { right: 0 } : { left: 0 }),
     zIndex: 50,
     width: "268px",
     background: rgb(T.canvasSoft),
@@ -86,7 +105,7 @@ export default function FilterDropdown({
       </button>
 
       {open && (
-        <div style={pop}>
+        <div ref={popRef} style={pop}>
           <input
             autoFocus
             value={query}

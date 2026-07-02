@@ -42,6 +42,7 @@ export interface ApiResponse {
   repo: string; // "host/group/project" — canonical path, shown as the subtitle
   project: string; // GitLab display name ("Group / Project") — shown as the title
   asOf: string; // YYYY-MM-DD
+  fetchedAt: string; // full ISO — when the server actually fetched from GitLab
   issues: Issue[];
   milestones: Milestone[];
   checkpointLabel: string; // label name that marks an issue as a checkpoint (legend text)

@@ -165,7 +165,7 @@ async function gitlabFetch(cfg: GitLabConfig, path: string): Promise<Response> {
   const res = await fetch(`${cfg.baseUrl}/api/v4${path}`, {
     headers: { "PRIVATE-TOKEN": cfg.token },
     signal: AbortSignal.timeout(15_000),
-    next: { revalidate: 60 }, // TTL cache — avoids hammering GitLab across tabs/reloads
+    cache: "no-store", // caching lives in getIssues() (module TTL) — a Next fetch cache here would stack a second stale window on top
   });
   if (!res.ok) {
     const detail =
@@ -237,8 +237,8 @@ async function fetchRepoMeta(cfg: GitLabConfig): Promise<{ repo: string; project
   }
 }
 
-/** Full API payload for the dashboard. */
-export async function getIssues(env?: Env): Promise<ApiResponse> {
+/** Full API payload for the dashboard (uncached). */
+async function fetchFresh(env?: Env): Promise<ApiResponse> {
   const cfg = getConfig(env);
   const now = Date.now();
   const [raw, meta, rawMs] = await Promise.all([
@@ -250,8 +250,34 @@ export async function getIssues(env?: Env): Promise<ApiResponse> {
     repo: meta.repo,
     project: meta.project,
     asOf: new Date(now).toISOString().slice(0, 10),
+    fetchedAt: new Date(now).toISOString(),
     issues: raw.map((r) => mapIssue(r, now, cfg.checkpointLabel)),
     milestones: rawMs.map(mapMilestone),
     checkpointLabel: cfg.checkpointLabel,
   };
+}
+
+// Single explicit TTL cache, replacing the former two stacked Next caches
+// (route revalidate + fetch revalidate) whose stale-while-revalidate windows
+// compounded to ~3min of staleness. Past the TTL we await a fresh payload
+// rather than serving stale, so worst-case staleness is exactly the TTL.
+// Module state is fine: this app runs as a single Node process (standalone).
+const CACHE_TTL_MS = 60_000;
+let cached: { payload: ApiResponse; fetchedAt: number } | null = null;
+let inFlight: Promise<ApiResponse> | null = null;
+
+export async function getIssues(env?: Env): Promise<ApiResponse> {
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached.payload;
+  if (!inFlight) {
+    // Concurrent callers (tabs polling in lockstep) share one upstream fetch.
+    inFlight = fetchFresh(env)
+      .then((payload) => {
+        cached = { payload, fetchedAt: Date.now() };
+        return payload;
+      })
+      .finally(() => {
+        inFlight = null; // also on failure — errors propagate, never cached
+      });
+  }
+  return inFlight;
 }
