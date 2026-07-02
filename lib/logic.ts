@@ -108,6 +108,29 @@ export function windowFor(mode: CalMode, anchor: number): { weekStart: number; w
   return { weekStart, weeks: Math.round((weekEnd - weekStart + 1) / 7) };
 }
 
+/* ── non-working weekdays (calendar column hiding) ── */
+
+export const DEFAULT_HIDDEN_DOWS = [0, 6]; // Sun + Sat hidden by default
+
+/** Defensive normalization for values coming from localStorage: keep unique
+ *  integers 0..6; anything malformed — or all 7 days hidden — falls back to
+ *  the default so the calendar always keeps at least one column. */
+export function sanitizeHiddenDows(v: unknown): number[] {
+  if (!Array.isArray(v)) return DEFAULT_HIDDEN_DOWS;
+  const set = new Set<number>();
+  for (const x of v) if (Number.isInteger(x) && x >= 0 && x <= 6) set.add(x as number);
+  if (set.size >= 7) return DEFAULT_HIDDEN_DOWS;
+  return [...set].sort((a, b) => a - b);
+}
+
+/** Toggle weekday `dw` in the hidden set. Hiding the last visible column is a
+ *  no-op (the input is returned unchanged). */
+export function toggleDow(hidden: number[], dw: number): number[] {
+  if (hidden.includes(dw)) return hidden.filter((x) => x !== dw);
+  if (hidden.length >= 6) return hidden; // would leave zero visible columns
+  return hidden.concat(dw).sort((a, b) => a - b);
+}
+
 /** Greedy interval-partition into lanes: mutates each item's `lane` and returns
  *  the lane count. Items touching on the same day still collide (strict `>`). */
 export function assignLanes<T extends { startDay: number; endDay: number; lane: number }>(
@@ -253,8 +276,8 @@ export interface CalSegment {
   label: string; // rendered only when showLabel
   showLabel: boolean; // true on the row where the item actually starts
   meta: string; // legacy hover text (bars); unused by the renderer now
-  colStart: number; // 0..6
-  colSpan: number; // 1..7
+  colStart: number; // compressed visible-column index (0..nCols-1)
+  colSpan: number; // 1..nCols
   gridRowStart: number; // 1-based lane row (milestone lanes first, then issues)
   style: CSSProperties; // precomputed bar style incl. gridColumn/gridRow
   starStyle?: CSSProperties; // present on a checkpoint's end segment (★)
@@ -275,23 +298,32 @@ export interface CalDay {
 }
 export interface CalWeek {
   key: string;
-  days: CalDay[]; // length 7
+  days: CalDay[]; // visible (non-hidden) days only, length = column count
   segments: CalSegment[];
   laneCount: number; // occupied lanes in this row (0 = empty)
-  todayCol: number | null;
-  headStyle: CSSProperties; // day-number row (7-col grid)
-  gridStyle: CSSProperties; // bar grid container (relative, 7-col, auto-rows)
+  todayCol: number | null; // compressed column of today; null if out of row or hidden
+  headStyle: CSSProperties; // day-number row grid (one column per visible day)
+  gridStyle: CSSProperties; // bar grid container (relative, visible cols, auto-rows)
   todayStripStyle: CSSProperties | null; // tinted vertical strip behind bars
+}
+/** One weekday chip of the "表示曜日" toggle group. */
+export interface DowToggle {
+  label: string; // "月".."日"
+  active: boolean; // currently visible
+  disabled: boolean; // hiding this would leave zero columns
+  style: CSSProperties;
+  onClick: () => void;
 }
 export interface CalVals {
   weeks: CalWeek[];
-  weekdayLabels: string[]; // rotated to WEEK_START
+  weekdayLabels: string[]; // visible weekdays only, rotated to WEEK_START
   weekdayRowStyle: CSSProperties;
   title: string; // "2026年 7月" | "6/29 – 7/12"
   modeBtns: { month: Btn; twoweek: Btn };
   navPrev: Btn;
   navNext: Btn;
   navToday: Btn;
+  dowToggles: DowToggle[]; // 7 chips in WEEK_START order (non-working-day setting)
   laneHeight: number;
   empty: boolean;
   legend: { checkpointLabel: string };
@@ -321,9 +353,11 @@ export interface Vals {
   calendar: CalVals;
   labelOptions: FilterOption[];
   assigneeOptions: FilterOption[];
+  milestoneOptions: FilterOption[];
   totalCount: number;
   clearBtn: { onClick: () => void };
   clearAssigneeBtn: { onClick: () => void };
+  clearMilestoneBtn: { onClick: () => void };
   gridStyle: CSSProperties;
   topN: number;
   rankTrackStyle: CSSProperties;
@@ -371,6 +405,22 @@ export function deriveAssignees(issues: Issue[]): { name: string; count: number 
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
+/** Unique milestone titles with issue frequency, most-populated first — powers
+ *  the milestone filter. Fetched milestones with zero issues (empty planning
+ *  buckets) are appended with count 0 so they stay selectable — picking one
+ *  shows just its bar on the calendar. */
+export function deriveMilestones(
+  issues: Issue[],
+  milestones: Milestone[],
+): { name: string; count: number }[] {
+  const m = new Map<string, number>();
+  for (const it of issues) m.set(it.milestone, (m.get(it.milestone) || 0) + 1);
+  for (const ms of milestones) if (!m.has(ms.title)) m.set(ms.title, 0);
+  return [...m.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
 /* ------------------------------------------------------------------ *
  *  renderVals — the whole view model
  * ------------------------------------------------------------------ */
@@ -396,12 +446,18 @@ export function renderVals(
   const pass = (it: Issue) =>
     (st.status === "all" || (st.status === "open" ? it.isOpen : !it.isOpen)) &&
     (st.labels.length === 0 || issueFilterLabels(it).some((n) => st.labels.includes(n))) &&
-    (st.assignees.length === 0 || st.assignees.includes(it.assignee));
+    (st.assignees.length === 0 || st.assignees.includes(it.assignee)) &&
+    (st.milestones.length === 0 || st.milestones.includes(it.milestone));
   const filtered = data.filter(pass);
-  // Calendar reuses the same filtered issue set; milestones show unfiltered.
+  // Calendar reuses the same filtered issue set. Milestone bars follow the
+  // milestone filter (only the selected ones stay); other filters leave them.
+  const calMilestones =
+    st.milestones.length === 0
+      ? meta.milestones
+      : meta.milestones.filter((m) => st.milestones.includes(m.title));
   const calendar = buildCalendar(
     filtered,
-    meta.milestones,
+    calMilestones,
     st,
     patch,
     todayIndex,
@@ -815,6 +871,17 @@ export function renderVals(
           : s.assignees.concat(a.name),
       })),
   }));
+  const milestoneOptions: FilterOption[] = deriveMilestones(data, meta.milestones).map((ms) => ({
+    name: ms.name,
+    count: ms.count,
+    active: st.milestones.includes(ms.name),
+    onToggle: () =>
+      patch((s) => ({
+        milestones: s.milestones.includes(ms.name)
+          ? s.milestones.filter((x) => x !== ms.name)
+          : s.milestones.concat(ms.name),
+      })),
+  }));
 
   return {
     repo: meta.repo,
@@ -855,9 +922,11 @@ export function renderVals(
     calendar,
     labelOptions,
     assigneeOptions,
+    milestoneOptions,
     totalCount: data.length,
     clearBtn: { onClick: () => patch({ labels: [] }) },
     clearAssigneeBtn: { onClick: () => patch({ assignees: [] }) },
+    clearMilestoneBtn: { onClick: () => patch({ milestones: [] }) },
     gridStyle,
     topN,
     rankTrackStyle,
@@ -1192,6 +1261,37 @@ export function buildCalendar(
   const winEnd = weekStart + weeks * 7 - 1;
   const anchorMonth = new Date(st.calAnchor * DAY).getUTCMonth();
 
+  // ── non-working weekday compression ──
+  // Every row starts on WEEK_START, so the visible-offset pattern is identical
+  // across rows and one map serves the whole window. Date math elsewhere stays
+  // 7-day-based; only rendering coordinates are compressed.
+  const hiddenSet = new Set(sanitizeHiddenDows(st.hiddenDows));
+  const visOffsets: number[] = [];
+  for (let o = 0; o < 7; o++) if (!hiddenSet.has((WEEK_START + o) % 7)) visOffsets.push(o);
+  const nCols = visOffsets.length; // >= 1 — sanitizeHiddenDows never hides all 7
+  const colFor: number[] = new Array(7).fill(-1); // raw in-week offset -> compressed column
+  visOffsets.forEach((o, i) => (colFor[o] = i));
+  const visBefore = [0]; // visBefore[o] = visible columns before offset o (length 8)
+  for (let o = 0; o < 7; o++) visBefore.push(visBefore[o] + (colFor[o] >= 0 ? 1 : 0));
+  /** In-row offset range [a..b] -> compressed {colStart,colSpan}; null when the
+   *  whole range falls on hidden weekdays. Hidden days inside the range leave
+   *  no gap in compressed space, so one contiguous span always suffices. */
+  const compress = (a: number, b: number): { colStart: number; colSpan: number } | null => {
+    const colSpan = visBefore[b + 1] - visBefore[a];
+    return colSpan > 0 ? { colStart: visBefore[a], colSpan } : null;
+  };
+  const isVis = (d: number) => !hiddenSet.has(dowOf(d));
+  /** First/last visible day in [from..to], or null. The weekday pattern repeats
+   *  every 7 days, so 7 probes suffice for any range length. */
+  const firstVisibleDay = (from: number, to: number): number | null => {
+    for (let d = from; d <= to && d < from + 7; d++) if (isVis(d)) return d;
+    return null;
+  };
+  const lastVisibleDay = (from: number, to: number): number | null => {
+    for (let d = to; d >= from && d > to - 7; d--) if (isVis(d)) return d;
+    return null;
+  };
+
   // ── milestones -> intervals ──
   const mItemsAll: CalItem[] = [];
   for (const m of milestones) {
@@ -1246,7 +1346,13 @@ export function buildCalendar(
   // ── clip to the visible window, then assign lanes per band ──
   // Bands stack top-to-bottom: milestones, checkpoints (always shown), then
   // regular issues (the only band subject to the lane cap / overflow).
-  const inWin = (it: CalItem) => it.endDay >= winStart && it.startDay <= winEnd;
+  // An item must overlap the window AND have at least one visible day in it —
+  // otherwise it would consume a lane (pushing others into "+N件" chips) while
+  // rendering nothing.
+  const inWin = (it: CalItem) =>
+    it.endDay >= winStart &&
+    it.startDay <= winEnd &&
+    firstVisibleDay(Math.max(it.startDay, winStart), Math.min(it.endDay, winEnd)) !== null;
   const mItems = mItemsAll.filter(inWin);
   const iItems = iItemsAll.filter(inWin);
   const cpItems = iItems.filter((it) => it.isCheckpoint);
@@ -1267,8 +1373,8 @@ export function buildCalendar(
     const rowStart = weekStart + r * 7;
     const rowEnd = rowStart + 6;
 
-    const days: CalDay[] = [];
-    for (let c = 0; c < 7; c++) {
+    const days: CalDay[] = []; // visible days only (length nCols)
+    for (const c of visOffsets) {
       const d = rowStart + c;
       const date = new Date(d * DAY);
       const isToday = d === todayIndex;
@@ -1309,15 +1415,24 @@ export function buildCalendar(
       if (it.endDay < rowStart || it.startDay > rowEnd) return;
       const segStart = Math.max(it.startDay, rowStart);
       const segEnd = Math.min(it.endDay, rowEnd);
-      const colStart = segStart - rowStart;
-      const colSpan = segEnd - segStart + 1;
-      const isStart = it.startDay >= rowStart;
-      const isEnd = it.endDay <= rowEnd;
-      // Label goes on the first row rendered inside the window — the true
-      // start row, or the left-clipped row when the bar starts before the
-      // window ("…" marks the clip; a bar keyed to its off-screen start row
-      // would otherwise never get a label).
-      const labelHere = segStart === Math.max(it.startDay, winStart);
+      const cc = compress(segStart - rowStart, segEnd - rowStart);
+      if (!cc) return; // this row's slice falls entirely on hidden weekdays
+      // Visual bar ends: the first/last *visible* day of the whole bar decides
+      // rounding and the ★ position (a Sunday end renders on Friday when
+      // weekends are hidden). Non-null for inWin items: any 7-day span
+      // contains a visible day, and shorter bars passed the inWin probe.
+      const barVisStart = firstVisibleDay(it.startDay, it.endDay) as number;
+      const barVisEnd = lastVisibleDay(it.startDay, it.endDay) as number;
+      const isStart = barVisStart >= rowStart;
+      const isEnd = barVisEnd <= rowEnd;
+      // Label goes on the row holding the first day actually rendered inside
+      // the window. "…" marks any bar whose true start is not that day —
+      // clipped by the window edge or by a hidden weekday alike.
+      const labelAnchor = firstVisibleDay(
+        Math.max(it.startDay, winStart),
+        Math.min(it.endDay, winEnd),
+      ) as number; // non-null by inWin
+      const labelHere = labelAnchor >= rowStart && labelAnchor <= rowEnd;
       const gridRowStart = laneOffset + it.lane + 1;
       laneCount = Math.max(laneCount, gridRowStart);
       const s: CalSegment = {
@@ -1325,13 +1440,13 @@ export function buildCalendar(
         kind: "bar",
         track: it.track,
         id: it.id,
-        label: labelHere && !isStart ? `…${it.label}` : it.label,
+        label: labelHere && labelAnchor !== it.startDay ? `…${it.label}` : it.label,
         showLabel: labelHere,
         meta: it.meta,
-        colStart,
-        colSpan,
+        colStart: cc.colStart,
+        colSpan: cc.colSpan,
         gridRowStart,
-        style: barStyle(it, isStart, isEnd, colStart, colSpan, gridRowStart),
+        style: barStyle(it, isStart, isEnd, cc.colStart, cc.colSpan, gridRowStart),
         isCheckpoint: it.track === "issue" && it.isCheckpoint,
         tip: buildTip(it),
       };
@@ -1357,7 +1472,8 @@ export function buildCalendar(
       if (it.dueDay !== null && (vStatus === "lateClosed" || vStatus === "overdueOpen")) {
         const os = Math.max(it.dueDay + 1, it.startDay, rowStart);
         const oe = Math.min(it.endDay, rowEnd);
-        if (oe >= os) {
+        const oc = oe >= os ? compress(os - rowStart, oe - rowStart) : null;
+        if (oc) {
           segments.push({
             key: `${it.track}-${it.id}-overrun-r${r}`,
             kind: "overrun",
@@ -1366,14 +1482,18 @@ export function buildCalendar(
             label: "",
             showLabel: false,
             meta: "",
-            colStart: os - rowStart,
-            colSpan: oe - os + 1,
+            colStart: oc.colStart,
+            colSpan: oc.colSpan,
             gridRowStart,
-            style: overrunStyle(os - rowStart, oe - os + 1, gridRowStart, it.endDay <= rowEnd),
+            style: overrunStyle(oc.colStart, oc.colSpan, gridRowStart, isEnd),
           });
         }
-        if (it.dueDay >= it.startDay && it.dueDay >= rowStart && it.dueDay <= rowEnd) {
-          const tCol = it.dueDay - rowStart;
+        // The plan tick snaps back to the last visible day <= due, so it keeps
+        // marking the plan/actual boundary when the due day itself is hidden
+        // (Saturday due, weekends hidden -> tick on Friday's right edge).
+        const tickDay = it.dueDay >= it.startDay ? lastVisibleDay(it.startDay, it.dueDay) : null;
+        if (tickDay !== null && tickDay >= rowStart && tickDay <= rowEnd) {
+          const tCol = colFor[tickDay - rowStart];
           segments.push({
             key: `${it.track}-${it.id}-duetick-r${r}`,
             kind: "duetick",
@@ -1400,7 +1520,7 @@ export function buildCalendar(
     // covering it (milestones + checkpoints + regular issues).
     const covers = (it: CalItem, d: number) => it.startDay <= d && it.endDay >= d;
     const overflowRow = issueOffset + maxLanes + 1;
-    for (let c = 0; c < 7; c++) {
+    for (const c of visOffsets) {
       const d = rowStart + c;
       const hidden = regItems.filter((it) => it.lane >= maxLanes && covers(it, d)).length;
       if (hidden === 0) continue;
@@ -1418,28 +1538,31 @@ export function buildCalendar(
         label: `+${hidden}`,
         showLabel: true,
         meta: "",
-        colStart: c,
+        colStart: colFor[c],
         colSpan: 1,
         gridRowStart: overflowRow,
-        style: overflowStyle(c, overflowRow),
+        style: overflowStyle(colFor[c], overflowRow),
         overflowLabel: `+${hidden} 件`,
         dayLabel: dayLabelOf(d),
         items,
       });
     }
 
-    const todayCol = todayIndex >= rowStart && todayIndex <= rowEnd ? todayIndex - rowStart : null;
+    // Compressed column of today; null when today is out of row or on a
+    // hidden weekday (then no strip and no header highlight).
+    const todayOff = todayIndex >= rowStart && todayIndex <= rowEnd ? todayIndex - rowStart : -1;
+    const todayCol = todayOff >= 0 && colFor[todayOff] >= 0 ? colFor[todayOff] : null;
     weeksOut.push({
       key: "w" + rowStart,
       days,
       segments,
       laneCount,
       todayCol,
-      headStyle: { display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))" },
+      headStyle: { display: "grid", gridTemplateColumns: `repeat(${nCols},minmax(0,1fr))` },
       gridStyle: {
         position: "relative",
         display: "grid",
-        gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+        gridTemplateColumns: `repeat(${nCols},minmax(0,1fr))`,
         gridAutoRows: laneHeight + "px",
         rowGap: "3px",
         padding: "5px 0 7px",
@@ -1452,8 +1575,8 @@ export function buildCalendar(
               position: "absolute",
               top: 0,
               bottom: 0,
-              left: (todayCol / 7) * 100 + "%",
-              width: 100 / 7 + "%",
+              left: (todayCol / nCols) * 100 + "%",
+              width: 100 / nCols + "%",
               background: rgba(T.primary, 0.06),
               pointerEvents: "none",
             }
@@ -1461,7 +1584,7 @@ export function buildCalendar(
     });
   }
 
-  const weekdayLabels = Array.from({ length: 7 }, (_, i) => JP_WEEKDAY[(WEEK_START + i) % 7]);
+  const weekdayLabels = visOffsets.map((o) => JP_WEEKDAY[(WEEK_START + o) % 7]);
 
   const title =
     st.calMode === "month"
@@ -1479,12 +1602,33 @@ export function buildCalendar(
   const prevAnchor = st.calMode === "twoweek" ? st.calAnchor - 14 : stepMonth(-1);
   const nextAnchor = st.calMode === "twoweek" ? st.calAnchor + 14 : stepMonth(1);
 
+  // Non-working-day chips (表示曜日), Monday-first. `toggleDow` guards the
+  // last visible column on the state side; `disabled` mirrors it in the UI.
+  const dowToggles: DowToggle[] = Array.from({ length: 7 }, (_, i) => {
+    const dw = (WEEK_START + i) % 7;
+    const active = !hiddenSet.has(dw);
+    const disabled = active && nCols <= 1;
+    return {
+      label: JP_WEEKDAY[dw],
+      active,
+      disabled,
+      style: {
+        ...seg(active),
+        padding: "3px 8px",
+        fontSize: "11px",
+        opacity: disabled ? 0.35 : active ? 1 : 0.55,
+        cursor: disabled ? "default" : "pointer",
+      },
+      onClick: () => patch((s) => ({ hiddenDows: toggleDow(s.hiddenDows, dw) })),
+    };
+  });
+
   return {
     weeks: weeksOut,
     weekdayLabels,
     weekdayRowStyle: {
       display: "grid",
-      gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+      gridTemplateColumns: `repeat(${nCols},minmax(0,1fr))`,
       marginTop: "4px",
     },
     title,
@@ -1498,6 +1642,7 @@ export function buildCalendar(
     navPrev: { style: seg(false), onClick: navTo(prevAnchor) },
     navNext: { style: seg(false), onClick: navTo(nextAnchor) },
     navToday: { style: seg(false), onClick: navTo(todayIndex) },
+    dowToggles,
     laneHeight,
     empty: mItems.length === 0 && iItems.length === 0,
     legend: { checkpointLabel },

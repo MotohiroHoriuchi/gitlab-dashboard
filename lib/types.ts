@@ -59,6 +59,8 @@ export interface DashState {
   sort: SortMode;
   labels: string[];
   assignees: string[];
+  milestones: string[]; // selected milestone titles ("Backlog" = no milestone)
+  hiddenDows: number[]; // non-working weekdays hidden on the calendar, JS getDay() 0=Sun..6=Sat
   groupBy: GroupBy;
   hovered: string | null;
   panel: Panel;

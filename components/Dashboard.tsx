@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DAY, DEFAULT_GROUP_BY, S, renderVals, type Patch } from "@/lib/logic";
+import {
+  DAY,
+  DEFAULT_GROUP_BY,
+  DEFAULT_HIDDEN_DOWS,
+  S,
+  renderVals,
+  sanitizeHiddenDows,
+  type Patch,
+} from "@/lib/logic";
 import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
@@ -19,6 +27,20 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Non-working weekdays persist per browser. SSR prerender falls back to the
+// default, which never reaches the DOM: the first paint is the st-independent
+// loading screen, and by the time data arrives the stored value is in state.
+const HIDDEN_DOWS_KEY = "gitlab-dashboard.hiddenDows.v1";
+function loadHiddenDows(): number[] {
+  if (typeof window === "undefined") return DEFAULT_HIDDEN_DOWS;
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_DOWS_KEY);
+    return raw ? sanitizeHiddenDows(JSON.parse(raw)) : DEFAULT_HIDDEN_DOWS;
+  } catch {
+    return DEFAULT_HIDDEN_DOWS; // broken JSON / storage blocked (private mode)
+  }
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +49,8 @@ export default function Dashboard() {
     sort: "linger",
     labels: [],
     assignees: [],
+    milestones: [],
+    hiddenDows: loadHiddenDows(),
     groupBy: DEFAULT_GROUP_BY,
     hovered: null,
     panel: "ranking",
@@ -35,6 +59,14 @@ export default function Dashboard() {
   });
   const patch: Patch = (p) =>
     setSt((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HIDDEN_DOWS_KEY, JSON.stringify(st.hiddenDows));
+    } catch {
+      // storage blocked — the setting just won't survive a reload
+    }
+  }, [st.hiddenDows]);
 
   useEffect(() => {
     let alive = true;

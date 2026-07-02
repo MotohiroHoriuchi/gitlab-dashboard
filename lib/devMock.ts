@@ -89,6 +89,10 @@ const SEEDS: Seed[] = [
   { id: 132, title: "不具合修正D", labelName: "bug", color: "248 81 73", createdAt: "2026-06-14", closedAt: "2026-06-19", dueDate: "2026-06-20", assignee: "佐藤 玲", milestone: "Sprint 11" },
   { id: 133, title: "手順書更新A", labelName: "docs", color: "108 182 255", createdAt: "2026-05-10", closedAt: "2026-05-13", dueDate: "2026-05-14", assignee: "田中 一郎", milestone: "Sprint 10" },
   { id: 134, title: "手順書更新B", labelName: "docs", color: "108 182 255", createdAt: "2026-06-01", closedAt: "2026-06-04", dueDate: "2026-06-05", assignee: "鈴木 花子", milestone: "Sprint 11" },
+  // 非稼働曜日(土日非表示)の検証用: 土日のみで完結 → 非表示時は完全に消える
+  { id: 116, title: "週末ホットフィックス（土日のみ）", labelName: "bug", color: "248 81 73", createdAt: "2026-07-04", closedAt: "2026-07-05", dueDate: "2026-07-05", assignee: "佐藤 玲", milestone: "Sprint 12" },
+  // 土曜期限+遅延クローズ → 予定線が直前の可視日(金曜)にスナップする
+  { id: 117, title: "土曜期限・遅延クローズ", labelName: "ops", color: "210 153 34", createdAt: "2026-07-01", closedAt: "2026-07-08", dueDate: "2026-07-04", assignee: "田中 一郎", milestone: "Sprint 12" },
 ];
 
 const MILESTONES: Milestone[] = [

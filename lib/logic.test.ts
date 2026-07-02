@@ -4,13 +4,16 @@ import {
   buildCalendar,
   colOf,
   dayIndex,
+  DEFAULT_HIDDEN_DOWS,
   deriveLabelDefs,
   dowOf,
   issueFilterLabels,
   issueInterval,
   renderVals,
+  sanitizeHiddenDows,
   scheduleSummary,
   scheduleVariance,
+  toggleDow,
   windowFor,
   type Patch,
 } from "./logic";
@@ -25,6 +28,8 @@ function twoWeekState(anchor: number): DashState {
     sort: "linger",
     labels: [],
     assignees: [],
+    milestones: [],
+    hiddenDows: [], // all 7 days visible — compression is the identity here
     groupBy: "label",
     hovered: null,
     panel: "calendar",
@@ -420,12 +425,150 @@ describe("buildCalendar", () => {
   });
 });
 
+describe("sanitizeHiddenDows / toggleDow", () => {
+  it("normalizes valid input and falls back on malformed values", () => {
+    expect(sanitizeHiddenDows([6, 0, 0])).toEqual([0, 6]); // dedupe + sort
+    expect(sanitizeHiddenDows([7, -1, 1.5, "0"])).toEqual([]); // junk filtered out
+    expect(sanitizeHiddenDows("xyz")).toEqual(DEFAULT_HIDDEN_DOWS);
+    expect(sanitizeHiddenDows(null)).toEqual(DEFAULT_HIDDEN_DOWS);
+    expect(sanitizeHiddenDows([0, 1, 2, 3, 4, 5, 6])).toEqual(DEFAULT_HIDDEN_DOWS); // all hidden
+  });
+
+  it("toggleDow adds/removes and refuses to hide the last visible column", () => {
+    expect(toggleDow([0, 6], 3)).toEqual([0, 3, 6]);
+    expect(toggleDow([0, 3, 6], 3)).toEqual([0, 6]);
+    const six = [0, 1, 2, 3, 4, 6]; // only Friday(5) still visible
+    expect(toggleDow(six, 5)).toEqual(six); // guarded no-op
+  });
+});
+
+describe("buildCalendar with hidden weekdays", () => {
+  const anchorMon = dayIndex("2026-07-06"); // Monday -> window 07-06 .. 07-19
+  const wk = (hiddenDows: number[]): DashState => ({ ...twoWeekState(anchorMon), hiddenDows });
+
+  it("compresses a Fri→Mon bar across the hidden weekend", () => {
+    const iss = mkIssue({ id: 1, isOpen: false, createdAt: "2026-07-10", closedAt: "2026-07-13" });
+    const cal = buildCalendar([iss], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    const w0 = cal.weeks[0].segments.find((s) => s.id === 1)!;
+    expect(w0.colStart).toBe(4); // Friday = 5th visible column
+    expect(w0.colSpan).toBe(1); // Sat/Sun slice is gone
+    expect(w0.style.borderRadius).toBe("5px 1px 1px 5px"); // visual start, not end
+    const w1 = cal.weeks[1].segments.find((s) => s.id === 1)!;
+    expect(w1.colStart).toBe(0); // Monday
+    expect(w1.colSpan).toBe(1);
+    expect(w1.style.borderRadius).toBe("1px 5px 5px 1px"); // visual end
+  });
+
+  it("labels a Saturday-start bar on its first visible day with a … prefix", () => {
+    const iss = mkIssue({ id: 2, title: "T", isOpen: false, createdAt: "2026-07-11", closedAt: "2026-07-14" });
+    const cal = buildCalendar([iss], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    expect(cal.weeks[0].segments.filter((s) => s.id === 2).length).toBe(0); // Sat–Sun slice hidden
+    const w1 = cal.weeks[1].segments.find((s) => s.id === 2)!;
+    expect(w1.colStart).toBe(0); // Mon 07-13
+    expect(w1.colSpan).toBe(2); // Mon + Tue
+    expect(w1.showLabel).toBe(true);
+    expect(w1.label).toBe("…T");
+  });
+
+  it("drops weekend-only bars entirely and keeps `empty` accurate", () => {
+    const iss = mkIssue({ id: 3, isOpen: false, createdAt: "2026-07-11", closedAt: "2026-07-12" });
+    const cal = buildCalendar([iss], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    expect(cal.weeks.flatMap((w) => w.segments).length).toBe(0);
+    expect(cal.empty).toBe(true);
+  });
+
+  it("weekend-only bars don't consume a lane (no spurious overflow chips)", () => {
+    // month mode caps at 3 lanes. If the weekend-only bar kept its lane, the
+    // three weekday bars would be pushed to lanes 1..3 and the last would
+    // overflow into "+N 件" chips.
+    const wkOnly = mkIssue({ id: 10, isOpen: false, createdAt: "2026-07-11", closedAt: "2026-07-12" });
+    const weekday = [11, 12, 13].map((id) =>
+      mkIssue({ id, isOpen: false, createdAt: "2026-07-06", closedAt: "2026-07-17" }),
+    );
+    const st = { ...monthState(anchorMon), hiddenDows: [0, 6] };
+    const cal = buildCalendar([wkOnly, ...weekday], [], st, noop, TODAY, "checkpoint");
+    expect(cal.weeks.flatMap((w) => w.segments).filter((s) => s.kind === "overflow").length).toBe(0);
+  });
+
+  it("shrinks the grids to visible columns and filters weekday labels", () => {
+    const cal = buildCalendar([], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    expect(cal.weekdayLabels).toEqual(["月", "火", "水", "木", "金"]);
+    expect(cal.weekdayRowStyle.gridTemplateColumns).toBe("repeat(5,minmax(0,1fr))");
+    expect(cal.weeks[0].days.length).toBe(5);
+    expect(cal.weeks[0].gridStyle.gridTemplateColumns).toBe("repeat(5,minmax(0,1fr))");
+    expect(cal.weeks[0].headStyle.gridTemplateColumns).toBe("repeat(5,minmax(0,1fr))");
+  });
+
+  it("positions the today strip in compressed columns", () => {
+    // TODAY (Wed) sits in the week of 06-29; Mon..Fri visible -> column 2 of 5.
+    const cal = buildCalendar([], [], { ...twoWeekState(TODAY), hiddenDows: [0, 6] }, noop, TODAY, "checkpoint");
+    expect(cal.weeks[0].todayCol).toBe(2);
+    expect(cal.weeks[0].todayStripStyle!.left).toBe("40%");
+    expect(cal.weeks[0].todayStripStyle!.width).toBe("20%");
+  });
+
+  it("hides the today strip when today's weekday is hidden", () => {
+    const cal = buildCalendar([], [], { ...twoWeekState(TODAY), hiddenDows: [3] }, noop, TODAY, "checkpoint");
+    expect(cal.weeks[0].todayCol).toBeNull();
+    expect(cal.weeks[0].todayStripStyle).toBeNull();
+  });
+
+  it("snaps the due tick to the last visible day and compresses the overrun", () => {
+    // due Sunday 07-12 (hidden) -> tick on Friday 07-10; late close 07-15 ->
+    // overrun hatch on Mon..Wed of the next week.
+    const iss = mkIssue({ id: 4, isOpen: false, createdAt: "2026-07-08", dueDate: "2026-07-12", closedAt: "2026-07-15" });
+    const cal = buildCalendar([iss], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    const tick = cal.weeks[0].segments.find((s) => s.kind === "duetick" && s.id === 4)!;
+    expect(tick.colStart).toBe(4); // Friday 07-10
+    expect(cal.weeks[1].segments.filter((s) => s.kind === "duetick").length).toBe(0);
+    const over = cal.weeks[1].segments.find((s) => s.kind === "overrun" && s.id === 4)!;
+    expect(over.colStart).toBe(0); // Mon 07-13
+    expect(over.colSpan).toBe(3); // 07-13 .. 07-15
+  });
+
+  it("places overflow chips at compressed columns", () => {
+    const many = [21, 22, 23, 24].map((id) =>
+      mkIssue({ id, isOpen: false, createdAt: "2026-07-06", closedAt: "2026-07-17" }),
+    );
+    const st = { ...monthState(anchorMon), hiddenDows: [0, 6] };
+    const cal = buildCalendar(many, [], st, noop, TODAY, "checkpoint");
+    const chips = cal.weeks.flatMap((w) => w.segments).filter((s) => s.kind === "overflow");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((c) => c.colStart >= 0 && c.colStart <= 4)).toBe(true);
+  });
+
+  it("builds dowToggles Monday-first with the hidden days inactive", () => {
+    const cal = buildCalendar([], [], wk([0, 6]), noop, TODAY, "checkpoint");
+    expect(cal.dowToggles.map((t) => t.label)).toEqual(["月", "火", "水", "木", "金", "土", "日"]);
+    expect(cal.dowToggles.map((t) => t.active)).toEqual([true, true, true, true, true, false, false]);
+    expect(cal.dowToggles.every((t) => !t.disabled)).toBe(true);
+  });
+
+  it("disables the last visible chip and toggles through functional patch", () => {
+    let state: DashState = { ...twoWeekState(anchorMon), hiddenDows: [0, 2, 3, 4, 5, 6] }; // only Monday
+    const patch: Patch = (p) => {
+      state = { ...state, ...(typeof p === "function" ? p(state) : p) };
+    };
+    const cal = buildCalendar([], [], state, patch, TODAY, "checkpoint");
+    const [mon, tue] = cal.dowToggles;
+    expect(mon.active).toBe(true);
+    expect(mon.disabled).toBe(true);
+    mon.onClick(); // guarded — hiding the last column is a no-op
+    expect(state.hiddenDows).toEqual([0, 2, 3, 4, 5, 6]);
+    expect(tue.active).toBe(false);
+    tue.onClick(); // re-show Tuesday
+    expect(state.hiddenDows).toEqual([0, 3, 4, 5, 6]);
+  });
+});
+
 describe("distribution box plots (renderVals)", () => {
   const distState = (): DashState => ({
     status: "all",
     sort: "linger",
     labels: [],
     assignees: [],
+    milestones: [],
+    hiddenDows: [],
     groupBy: "milestone",
     hovered: null,
     panel: "dist",
@@ -481,6 +624,8 @@ describe("label filtering spans all labels (display stays on the first)", () => 
     sort: "linger",
     labels,
     assignees: [],
+    milestones: [],
+    hiddenDows: [],
     groupBy: "label",
     hovered: null,
     panel: "ranking",

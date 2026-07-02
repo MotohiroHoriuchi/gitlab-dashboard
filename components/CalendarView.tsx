@@ -26,6 +26,15 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
   const [hover, setHover] = useState<HoverState>(null);
   const [day, setDay] = useState<DayState>(null);
   const [sparkle, setSparkle] = useState(0); // bump to replay the checkpoint-star shine
+
+  // One-shot: drop back to 0 once the 3s animations finish. While sparkle is
+  // set, every bar carries an `animation:` style, so any later remount
+  // (month/2-week switch, prev/next nav) would replay the whole show.
+  useEffect(() => {
+    if (!sparkle) return;
+    const t = setTimeout(() => setSparkle(0), 3200);
+    return () => clearTimeout(t);
+  }, [sparkle]);
   const dayRef = useRef<HTMLDivElement>(null);
 
   // close the day popover on outside click / Escape (mirrors FilterDropdown)
@@ -150,6 +159,23 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
           </span>
           チェックポイント（{cal.legend.checkpointLabel}）
         </button>
+        {/* non-working-day toggles: click a weekday chip to hide/show its column */}
+        <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
+          <span style={S("font-size:10.5px; color:rgb(110 118 129);")}>表示曜日</span>
+          {cal.dowToggles.map((t) => (
+            <button
+              type="button"
+              key={t.label}
+              style={t.style}
+              onClick={t.onClick}
+              disabled={t.disabled}
+              aria-pressed={t.active}
+              title={t.active ? "クリックで非表示" : "クリックで表示"}
+            >
+              {t.label}
+            </button>
+          ))}
+        </span>
       </div>
 
       {/* ── weekday header ── */}

@@ -4,7 +4,7 @@ import { S, type Vals } from "@/lib/logic";
 import type { DashState } from "@/lib/types";
 import FilterDropdown from "@/components/FilterDropdown";
 
-/** Shared filter bar: 状態 → (並べ替え, when showSort) → ラベル → 担当者 → 該当件数.
+/** Shared filter bar: 状態 → (並べ替え, when showSort) → ラベル → 担当者 → マイルストーン → 該当件数.
  *  Used by the issue-list tab (showSort) and the calendar tab (no sort). */
 export default function FilterControls({
   v,
@@ -46,6 +46,12 @@ export default function FilterControls({
         options={v.assigneeOptions}
         selectedCount={st.assignees.length}
         onClear={v.clearAssigneeBtn.onClick}
+      />
+      <FilterDropdown
+        title="マイルストーン"
+        options={v.milestoneOptions}
+        selectedCount={st.milestones.length}
+        onClear={v.clearMilestoneBtn.onClick}
       />
       <div style={S("margin-left:auto; font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>
         該当 {v.filterSummary}
