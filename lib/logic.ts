@@ -36,6 +36,17 @@ export const SANS = "var(--font-inter), system-ui, -apple-system, sans-serif";
 export const MONO =
   "var(--font-jetbrains-mono), ui-monospace, 'SFMono-Regular', monospace";
 
+/* Type scale (px) for the calendar/roadmap views. Every font-size in those
+ * views sits on one of these four steps — px literals inside S("…") strings
+ * must use the same values. Contrast rules on the dark canvas: at TS_SM and
+ * below never use T.mutedSoft (minimum: T.muted + weight 500); primary
+ * content (bar labels, "+N" chips, tick ids) uses T.body or brighter;
+ * T.mutedSoft is reserved for 13px+ asides and decoration. */
+export const TS_XS = 10.5; // badges, tick ids, auxiliary chips (hard floor)
+export const TS_SM = 11.5; // bar labels, meta lines, legends, small headings
+export const TS_MD = 12.5; // popover body, day numbers, values
+export const TS_LG = 13.5; // tooltip / popover row titles
+
 export const rgb = (t: string) => `rgb(${t})`;
 export const rgba = (t: string, a: number) => `rgb(${t} / ${a})`;
 const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
@@ -967,6 +978,10 @@ const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
 /** Max issue lanes drawn per week before the surplus collapses into a per-day
  *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
 const MAX_LANES = 3;
+/** Calendar bar/lane geometry (px) — sized so a TS_SM label fits in the bar. */
+const BAR_H = 20;
+const LANE_H = BAR_H + 3; // grid row height; rowGap adds the rest of the pitch
+const DUETICK_H = BAR_H + 2; // the plan tick pokes past the bar edges
 const JP_WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
 
 interface CalItem {
@@ -1093,14 +1108,14 @@ function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
     gridColumn: `${colStart + 1} / span 1`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: "16px",
+    height: BAR_H + "px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "0 4px",
     boxSizing: "border-box",
     borderRadius: "5px",
-    fontSize: "10px",
+    fontSize: TS_SM + "px",
     fontFamily: SANS,
     fontWeight: 700,
     lineHeight: 1,
@@ -1337,9 +1352,9 @@ export function relBadgeText(role: CalRole): string | null {
 /** position/z-index lift matches the bar label (above the overrun hatch). */
 export const relBadgeStyle: CSSProperties = {
   flex: "0 0 auto",
-  padding: "2px 4px",
+  padding: "2px 5px",
   borderRadius: "3px",
-  fontSize: "9px",
+  fontSize: TS_XS + "px",
   fontWeight: 700,
   lineHeight: 1,
   background: rgb(T.strong),
@@ -1366,15 +1381,15 @@ function barStyle(
     gridColumn: `${colStart + 1} / span ${colSpan}`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: "16px",
+    height: BAR_H + "px",
     display: "flex",
     alignItems: "center",
     gap: "3px",
-    padding: "0 5px",
+    padding: "0 6px",
     boxSizing: "border-box",
     overflow: "hidden",
     whiteSpace: "nowrap",
-    fontSize: "10px",
+    fontSize: TS_SM + "px",
     fontFamily: SANS,
     fontWeight: 600,
     lineHeight: 1,
@@ -1421,7 +1436,7 @@ function overrunStyle(
     gridColumn: `${colStart + 1} / span ${colSpan}`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: "16px",
+    height: BAR_H + "px",
     boxSizing: "border-box",
     borderRadius: roundRight ? "0 5px 5px 0" : "0",
     background:
@@ -1442,7 +1457,7 @@ function dueTickStyle(colStart: number, gridRowStart: number): CSSProperties {
     gridColumn: `${colStart + 1} / span 1`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: "18px",
+    height: DUETICK_H + "px",
     boxSizing: "border-box",
     borderRight: "2px solid " + rgb(T.ink),
     pointerEvents: "none",
@@ -1581,7 +1596,7 @@ export function buildCalendar(
   // before collapsing into overflow chips.
   const maxLanes = st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES;
 
-  const laneHeight = 19;
+  const laneHeight = LANE_H;
 
   // ── per-week rows ──
   const weeksOut: CalWeek[] = [];
@@ -1612,7 +1627,7 @@ export function buildCalendar(
         },
         numStyle: {
           fontFamily: MONO,
-          fontSize: "11px",
+          fontSize: TS_MD + "px",
           fontWeight: isToday ? 700 : 500,
           color: isToday
             ? rgb(T.primary)
@@ -1670,7 +1685,7 @@ export function buildCalendar(
         s.starStyle = {
           marginLeft: "auto",
           flex: "0 0 auto",
-          fontSize: "13px",
+          fontSize: "14px",
           lineHeight: 1,
           color: rgb(CHECKPOINT_STAR),
           textShadow: "0 0 6px " + rgba(CHECKPOINT_STAR, 0.9),
@@ -1833,8 +1848,8 @@ export function buildCalendar(
       disabled,
       style: {
         ...seg(active),
-        padding: "3px 8px",
-        fontSize: "11px",
+        padding: "4px 9px",
+        fontSize: TS_SM + "px",
         opacity: disabled ? 0.35 : active ? 1 : 0.55,
         cursor: disabled ? "default" : "pointer",
       },
@@ -1885,10 +1900,10 @@ const SPARK_W = 120,
   SPARK_PAD = 3;
 const CHART_W = 680,
   CHART_H = 200,
-  CHART_PADL = 30,
+  CHART_PADL = 34,
   CHART_PADR = 12,
   CHART_PADT = 12,
-  CHART_PADB = 22;
+  CHART_PADB = 24;
 
 export interface RoadmapGridLine {
   x: number; // 0..100

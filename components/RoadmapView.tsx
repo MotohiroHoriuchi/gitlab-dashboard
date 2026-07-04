@@ -76,7 +76,7 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
       {/* month header aligned to the track column */}
       <div style={{ display: "grid", gridTemplateColumns: COL, gap: "0 14px", alignItems: "end", marginBottom: "2px" }}>
         <div />
-        <div style={{ position: "relative", height: "16px" }}>
+        <div style={{ position: "relative", height: "18px" }}>
           {roadmap.gridLines.map((g, i) => (
             <span key={i} style={monthLabelStyle(g.x)}>{g.label}</span>
           ))}
@@ -125,7 +125,7 @@ function KpiColumn({ row }: { row: RoadmapRow }) {
     <div style={{ minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto", boxShadow: "0 0 6px " + rgba(tone, 0.6) }} />
-        <span style={{ minWidth: 0, fontSize: "12.5px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ minWidth: 0, fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {row.title}
         </span>
       </div>
@@ -133,9 +133,9 @@ function KpiColumn({ row }: { row: RoadmapRow }) {
         <div style={{ position: "relative", flex: "1 1 auto", height: "6px", borderRadius: "3px", background: rgba(T.hairline, 0.8), overflow: "hidden" }}>
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: row.pct + "%", background: rgb(tone), borderRadius: "3px" }} />
         </div>
-        <span style={{ fontSize: "11px", fontWeight: 700, color: rgb(tone), fontFamily: MONO, flex: "0 0 auto" }}>{row.pct}%</span>
+        <span style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(tone), fontFamily: MONO, flex: "0 0 auto" }}>{row.pct}%</span>
       </div>
-      <div style={{ marginTop: "4px", fontSize: "10.5px", color: rgb(T.mutedSoft), fontFamily: MONO }}>
+      <div style={{ marginTop: "4px", fontSize: "11.5px", color: rgb(T.mutedSoft), fontFamily: MONO }}>
         {row.hasSchedule || row.total > 0 ? `完了 ${row.done}/${row.total}` : "日程未設定"}
         {row.remaining > 0 && ` · 残${row.remaining}`}
         {row.overdue > 0 && <span style={{ color: rgb(T.warn), fontWeight: 700 }}> · 超過{row.overdue}</span>}
@@ -169,7 +169,7 @@ function Track({
 }) {
   const trackStyle: CSSProperties = {
     position: "relative",
-    height: "48px",
+    height: "56px",
     borderRadius: "6px",
     overflow: "hidden", // clamp any child that rounds past the edge
     backgroundImage: `repeating-linear-gradient(90deg, ${rgba(T.hairline, 0.35)} 0 1px, transparent 1px ${weekStepPct}%)`,
@@ -185,8 +185,8 @@ function Track({
         <div
           style={{
             position: "absolute",
-            top: "7px",
-            height: "16px",
+            top: "8px",
+            height: "20px",
             left: row.bar.left + "%",
             width: row.bar.width + "%",
             borderRadius: "5px",
@@ -196,7 +196,7 @@ function Track({
         />
       )}
       {row.dueX !== null && (
-        <div style={{ position: "absolute", top: "3px", height: "24px", left: row.dueX + "%", width: "0", borderLeft: "2px dotted " + rgba(T.ink, 0.7) }} title="期限" />
+        <div style={{ position: "absolute", top: "4px", height: "28px", left: row.dueX + "%", width: "0", borderLeft: "2px dotted " + rgba(T.ink, 0.7) }} title="期限" />
       )}
 
       {/* unfinished ticks (individually labeled) */}
@@ -205,8 +205,8 @@ function Track({
           <div style={tickLabelStyle(t.x)}>
             {t.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR) }}>★</span>} #{t.id}
           </div>
-          <div style={{ position: "absolute", left: 0, bottom: "-2px", transform: "translateX(-50%)", width: t.isCheckpoint ? "0" : "2px", height: "9px", background: t.isCheckpoint ? "transparent" : rgb(t.color) }}>
-            {t.isCheckpoint && <span style={{ position: "absolute", left: "-4px", bottom: 0, fontSize: "9px", color: rgb(CHECKPOINT_STAR) }}>★</span>}
+          <div style={{ position: "absolute", left: 0, bottom: "-2px", transform: "translateX(-50%)", width: t.isCheckpoint ? "0" : "2px", height: "10px", background: t.isCheckpoint ? "transparent" : rgb(t.color) }}>
+            {t.isCheckpoint && <span style={{ position: "absolute", left: "-4px", bottom: 0, fontSize: "10.5px", color: rgb(CHECKPOINT_STAR) }}>★</span>}
           </div>
         </div>
       ))}
@@ -236,9 +236,9 @@ function Expanded({ row }: { row: RoadmapRow }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", padding: "14px 4px 18px", borderBottom: "1px solid " + rgba(T.hairline, 0.5) }}>
       <div style={{ flex: "1 1 380px", minWidth: 0 }}>
-        <div style={{ fontSize: "11.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
+        <div style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
           バーンダウン
-          <span style={{ marginLeft: "10px", fontWeight: 400, color: rgb(T.mutedSoft), fontSize: "10.5px" }}>
+          <span style={{ marginLeft: "10px", fontWeight: 400, color: rgb(T.mutedSoft), fontSize: "11.5px" }}>
             <span style={{ color: rgb(tone) }}>実線</span>=残数 · <span style={{ color: rgb(T.mutedSoft) }}>破線</span>=理想 · <span style={{ color: rgba(MS_COLOR, 0.9) }}>薄線</span>=総スコープ
           </span>
         </div>
@@ -246,12 +246,12 @@ function Expanded({ row }: { row: RoadmapRow }) {
           <svg width="100%" viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxWidth: "100%", display: "block" }}>
             {b.yLabels.map((yl, i) => (
               <g key={i}>
-                <line x1="30" y1={yl.y} x2={CHART_W - 12} y2={yl.y} stroke={rgba(T.hairline, 0.5)} strokeWidth="1" />
-                <text x="26" y={yl.y + 3} textAnchor="end" fontSize="10" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{yl.label}</text>
+                <line x1="34" y1={yl.y} x2={CHART_W - 12} y2={yl.y} stroke={rgba(T.hairline, 0.5)} strokeWidth="1" />
+                <text x="30" y={yl.y + 4} textAnchor="end" fontSize="12" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{yl.label}</text>
               </g>
             ))}
             {b.xLabels.map((xl, i) => (
-              <text key={i} x={xl.x} y={CHART_H - 6} textAnchor={i === 0 ? "start" : i === b.xLabels.length - 1 ? "end" : "middle"} fontSize="10" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{xl.label}</text>
+              <text key={i} x={xl.x} y={CHART_H - 6} textAnchor={i === 0 ? "start" : i === b.xLabels.length - 1 ? "end" : "middle"} fontSize="12" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{xl.label}</text>
             ))}
             <polyline points={b.scopePoints} fill="none" stroke={rgba(MS_COLOR, 0.7)} strokeWidth="1.5" />
             <polyline points={b.idealPoints} fill="none" stroke={rgba(T.mutedSoft, 0.8)} strokeWidth="1.5" strokeDasharray="5 3" />
@@ -263,7 +263,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
       </div>
 
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-        <div style={{ fontSize: "11.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>残作業（未完 {row.remaining} 件）</div>
+        <div style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>残作業（未完 {row.remaining} 件）</div>
         <Bucket title="超過" tone="err" refs={row.buckets.overdue} />
         <Bucket title="今週（〜7日）" tone="warn" refs={row.buckets.thisWeek} />
         <Bucket title="それ以降・期限なし" tone="neutral" refs={row.buckets.later} />
@@ -278,16 +278,16 @@ function Bucket({ title, tone, refs }: { title: string; tone: "err" | "warn" | "
   const col = tone === "err" ? T.err : tone === "warn" ? T.warn : T.mutedSoft;
   return (
     <div style={{ marginBottom: "9px" }}>
-      <div style={{ fontSize: "10px", fontWeight: 700, color: rgb(col), textTransform: "uppercase", letterSpacing: ".04em", marginBottom: "3px" }}>
+      <div style={{ fontSize: "10.5px", fontWeight: 700, color: rgb(col), textTransform: "uppercase", letterSpacing: ".04em", marginBottom: "3px" }}>
         {title} · {refs.length}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
         {refs.map((r) => (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: rgb(T.body), minWidth: 0 }}>
-            <span style={{ fontFamily: MONO, fontSize: "10.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: rgb(T.body), minWidth: 0 }}>
+            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
             {r.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), flex: "0 0 auto" }}>★</span>}
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
-            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
+            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10.5px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
           </div>
         ))}
       </div>
@@ -306,7 +306,7 @@ function ChipPopover({ chip, innerRef, onClose }: { chip: NonNullable<ChipState>
         left,
         top,
         zIndex: 70,
-        width: "260px",
+        width: "280px",
         maxHeight: "320px",
         overflowY: "auto",
         background: rgb(T.canvasSoft),
@@ -318,16 +318,16 @@ function ChipPopover({ chip, innerRef, onClose }: { chip: NonNullable<ChipState>
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-        <span style={{ fontSize: "12px", fontWeight: 700, color: rgb(T.ink) }}>未完 {chip.refs.length} 件</span>
+        <span style={{ fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink) }}>未完 {chip.refs.length} 件</span>
         <button type="button" onClick={onClose} aria-label="閉じる" style={{ border: "none", background: "transparent", color: rgb(T.mutedSoft), cursor: "pointer", fontSize: "14px", lineHeight: 1 }}>×</button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
         {chip.refs.map((r) => (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: rgb(T.body), minWidth: 0 }}>
-            <span style={{ fontFamily: MONO, fontSize: "10.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: rgb(T.body), minWidth: 0 }}>
+            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
             {r.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), flex: "0 0 auto" }}>★</span>}
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
-            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
+            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10.5px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
           </div>
         ))}
       </div>
@@ -343,15 +343,15 @@ function edgeAnchor(x: number): { left: string; transform: string; textAlign: CS
 }
 function monthLabelStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "10px", color: rgb(T.mutedSoft), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "11.5px", color: rgb(T.mutedSoft), fontFamily: MONO, whiteSpace: "nowrap" };
 }
 function todayLabelStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "10px", fontWeight: 700, color: rgb(T.primary), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "11.5px", fontWeight: 700, color: rgb(T.primary), fontFamily: MONO, whiteSpace: "nowrap" };
 }
 function tickLabelStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: "10px", left: 0, transform: a.transform, fontSize: "9px", color: rgb(T.body), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: "12px", left: 0, transform: a.transform, fontSize: "10.5px", color: rgb(T.body), fontFamily: MONO, whiteSpace: "nowrap" };
 }
 function moreChipStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
@@ -360,9 +360,9 @@ function moreChipStyle(x: number): CSSProperties {
     bottom: "4px",
     left: a.left,
     transform: a.transform,
-    padding: "1px 5px",
+    padding: "2px 6px",
     borderRadius: "4px",
-    fontSize: "9.5px",
+    fontSize: "10.5px",
     fontWeight: 700,
     fontFamily: SANS,
     color: rgb(T.muted),

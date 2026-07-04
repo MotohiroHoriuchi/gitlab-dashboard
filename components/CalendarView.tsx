@@ -96,14 +96,14 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    "padding:2px 6px 5px; font-size:10px; font-weight:600; letter-spacing:.04em; color:rgb(110 118 129);",
+    "padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:rgb(110 118 129);",
   );
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
   const sparkleAnim: CSSProperties = sparkle ? { animation: "gi-sparkle 3s ease-in-out" } : {};
   const cpGlow: CSSProperties = sparkle ? { animation: "gi-checkpoint-glow 3s ease-in-out" } : {};
   const dimAnim: CSSProperties = sparkle ? { animation: "gi-dim 3s ease-in-out" } : {};
-  const starWrap: CSSProperties = { color: rgb("255 199 74"), fontSize: "12px", ...sparkleAnim };
+  const starWrap: CSSProperties = { color: rgb("255 199 74"), fontSize: "13px", ...sparkleAnim };
   const segKey = (k: string) => (sparkle ? `${k}-${sparkle}` : k);
 
   // Raw cursor-offset coordinates only — viewport clamping happens inside the
@@ -157,7 +157,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
       {/* ── legend ── */}
       <div
         style={S(
-          "display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11px; color:rgb(139 148 158);",
+          "display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:rgb(139 148 158);",
         )}
       >
         <Swatch style={{ background: rgba("176 131 240", 0.2), border: "1px solid " + rgba("176 131 240", 0.6) }} text="マイルストーン" />
@@ -187,7 +187,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
             background: "transparent",
             cursor: "pointer",
             color: rgb(T.muted),
-            fontSize: "11px",
+            fontSize: "11.5px",
             fontFamily: SANS,
           }}
         >
@@ -198,7 +198,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
         </button>
         {/* non-working-day toggles: click a weekday chip to hide/show its column */}
         <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
-          <span style={S("font-size:10.5px; color:rgb(110 118 129);")}>表示曜日</span>
+          <span style={S("font-size:11.5px; color:rgb(110 118 129);")}>表示曜日</span>
           {cal.dowToggles.map((t) => (
             <button
               type="button"
@@ -342,8 +342,8 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
     top,
     zIndex: 60,
     pointerEvents: "none",
-    minWidth: "160px",
-    maxWidth: "240px",
+    minWidth: "180px",
+    maxWidth: "280px",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
     borderRadius: "8px",
@@ -359,7 +359,7 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
           style={{
             flex: "1 1 auto",
             minWidth: 0,
-            fontSize: "12px",
+            fontSize: "13.5px",
             fontWeight: 700,
             color: rgb(T.ink),
             overflow: "hidden",
@@ -375,9 +375,9 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
           style={{
             display: "inline-block",
             marginBottom: "6px",
-            padding: "1px 7px",
+            padding: "2px 8px",
             borderRadius: "999px",
-            fontSize: "10px",
+            fontSize: "10.5px",
             fontWeight: 600,
             fontFamily: MONO,
             background: rgba(tip.color, 0.16),
@@ -391,8 +391,8 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px" }}>
         {tip.rows.map((r, i) => (
           <div key={i} style={{ display: "contents" }}>
-            <span style={{ fontSize: "10.5px", color: rgb(T.mutedSoft) }}>{r.k}</span>
-            <span style={{ fontSize: "11px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
+            <span style={{ fontSize: "11.5px", color: rgb(T.mutedSoft) }}>{r.k}</span>
+            <span style={{ fontSize: "12.5px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
               {r.v}
             </span>
           </div>
@@ -424,8 +424,8 @@ function DayPopover({
     left,
     top,
     zIndex: 70,
-    width: "300px",
-    maxHeight: "340px",
+    width: "330px",
+    maxHeight: "400px",
     overflowY: "auto",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
@@ -437,7 +437,7 @@ function DayPopover({
   return (
     <div ref={innerRef} style={box}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.ink) }}>{day.dayLabel}</span>
+        <span style={{ fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink) }}>{day.dayLabel}</span>
         <button
           type="button"
           onClick={onClose}
@@ -489,7 +489,7 @@ function DayPopover({
                   <span
                     style={{
                       minWidth: 0,
-                      fontSize: "12px",
+                      fontSize: "12.5px",
                       fontWeight: 600,
                       color: rgb(T.body),
                       overflow: "hidden",
@@ -499,9 +499,9 @@ function DayPopover({
                   >
                     {it.track === "issue" ? `#${it.id} ${it.title}` : it.title}
                   </span>
-                  {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "11px" }}>★</span>}
+                  {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "12px" }}>★</span>}
                 </div>
-                <div style={{ marginTop: "2px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
+                <div style={{ marginTop: "2px", fontSize: "11.5px", color: rgb(T.mutedSoft) }}>
                   <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
                   {metaRest(it) && <span> · {metaRest(it)}</span>}
                   {it.varianceLabel && (
@@ -512,7 +512,7 @@ function DayPopover({
                   )}
                 </div>
                 {it.relLine && (
-                  <div style={{ marginTop: "1px", fontSize: "10px", color: rgb(T.mutedSoft) }}>
+                  <div style={{ marginTop: "1px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
                     {it.relLine}
                   </div>
                 )}
@@ -526,8 +526,8 @@ function DayPopover({
 }
 
 const dot = (color: string): CSSProperties => ({
-  width: "9px",
-  height: "9px",
+  width: "10px",
+  height: "10px",
   borderRadius: "2px",
   background: rgb(color),
   flex: "0 0 auto",
