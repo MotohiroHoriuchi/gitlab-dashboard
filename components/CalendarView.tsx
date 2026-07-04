@@ -11,6 +11,7 @@ import {
   relBadgeText,
   rgb,
   rgba,
+  seg,
   selectionOverlay,
   selectionRole,
   toneColor,
@@ -29,7 +30,17 @@ type DayState = { dayLabel: string; items: CalDayItem[]; x: number; y: number } 
 /** Renderer for the calendar/timeline view model (buildCalendar). Layout lives
  *  in lib/logic.ts; this binds it to markup and owns only the client-side
  *  overlay interactions (hover tooltip + day-overflow popover). */
-export default function CalendarView({ cal }: { cal: CalVals }) {
+export default function CalendarView({
+  cal,
+  fullscreen,
+  onToggleFull,
+  onExitFull,
+}: {
+  cal: CalVals;
+  fullscreen?: boolean;
+  onToggleFull?: () => void;
+  onExitFull?: () => void;
+}) {
   const [hover, setHover] = useState<HoverState>(null);
   const [day, setDay] = useState<DayState>(null);
   // click-focus: "track:id" of the selected bar (highlights its relations,
@@ -86,6 +97,17 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [selected, day]);
+
+  // Escape's bottom layer: with no popover and no selection open (the two
+  // listeners above each consume one press), leave fullscreen mode.
+  useEffect(() => {
+    if (!fullscreen || !onExitFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !day && !selected) onExitFull();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [fullscreen, onExitFull, day, selected]);
 
   const toggleSelect = (key: string) => setSelected((p) => (p === key ? null : key));
 
@@ -151,6 +173,16 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
               ›
             </button>
           </div>
+          {onToggleFull && (
+            <button
+              style={seg(!!fullscreen)}
+              onClick={onToggleFull}
+              aria-pressed={!!fullscreen}
+              title={fullscreen ? "全画面を解除（Esc）" : "ツールバーとカレンダーだけを全画面表示"}
+            >
+              {fullscreen ? "✕ 全画面解除" : "⛶ 全画面"}
+            </button>
+          )}
         </div>
       </div>
 

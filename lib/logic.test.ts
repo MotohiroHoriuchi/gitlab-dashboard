@@ -44,6 +44,7 @@ function twoWeekState(anchor: number): DashState {
     panel: "calendar",
     calMode: "twoweek",
     calAnchor: anchor,
+    fullscreen: false,
   };
 }
 
@@ -404,6 +405,20 @@ describe("buildCalendar", () => {
     expect(chips.every((s) => s.overflowLabel === "+2 件")).toBe(true);
   });
 
+  it("doubles the lane cap again in fullscreen (month: 3 -> 6)", () => {
+    // 6 overlap in one month week: capped at 3 normally, all fit fullscreen.
+    const six = Array.from({ length: 6 }, (_, i) =>
+      mkIssue({ id: 230 + i, createdAt: "2026-07-06", dueDate: "2026-07-10" }),
+    );
+    const normal = buildCalendar(six, [], monthState(anchorMon), noop, TODAY, "checkpoint");
+    expect(normal.weeks.flatMap((w) => w.segments).filter((s) => s.kind === "overflow").length).toBeGreaterThan(0);
+
+    const full = buildCalendar(six, [], { ...monthState(anchorMon), fullscreen: true }, noop, TODAY, "checkpoint");
+    const segs = full.weeks.flatMap((w) => w.segments);
+    expect(segs.filter((s) => s.kind === "overflow").length).toBe(0);
+    expect(new Set(segs.filter((s) => s.kind === "bar").map((s) => s.gridRowStart)).size).toBe(6);
+  });
+
   it("keeps milestones visible and exempt from the issue lane cap", () => {
     const ms: Milestone = { id: 1, title: "m", startDate: "2026-07-06", dueDate: "2026-07-19", state: "active" };
     const issues = Array.from({ length: 5 }, (_, i) =>
@@ -735,6 +750,7 @@ describe("distribution box plots (renderVals)", () => {
     panel: "dist",
     calMode: "twoweek",
     calAnchor: TODAY,
+    fullscreen: false,
   });
   const meta = { repo: "r", project: "R", asOf: "2026-07-01", milestones: [], checkpointLabel: "checkpoint" };
   const closed = (id: number, milestone: string, linger: number): Issue =>
@@ -792,6 +808,7 @@ describe("label filtering spans all labels (display stays on the first)", () => 
     panel: "ranking",
     calMode: "twoweek",
     calAnchor: TODAY,
+    fullscreen: false,
   });
   // #1 leads with A but also carries B; #2 only has A.
   const twoLabelIssues = () => [

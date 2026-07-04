@@ -1593,8 +1593,10 @@ export function buildCalendar(
   assignLanes(regItems);
   const issueOffset = mLaneCount + cpLaneCount;
   // twoweek shows only 2 rows, so there is room for twice as many issue lanes
-  // before collapsing into overflow chips.
-  const maxLanes = st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES;
+  // before collapsing into overflow chips. Fullscreen doubles the cap again —
+  // the viewport overlay frees up the vertical room the page chrome used.
+  const laneScale = st.fullscreen ? 2 : 1;
+  const maxLanes = (st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES) * laneScale;
 
   const laneHeight = LANE_H;
 

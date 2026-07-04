@@ -8,6 +8,7 @@ import {
   T,
   rgb,
   rgba,
+  seg,
   toneColor,
   type CalTip,
   type RoadmapIssueRef,
@@ -30,7 +31,17 @@ type ChipState = { refs: RoadmapIssueRef[]; x: number; y: number } | null;
 /** Renderer for the roadmap/milestone-progress view model (buildMilestoneCalendar).
  *  One lane per milestone on a continuous date axis; progress + burndown in the
  *  left column; clicking a row expands a large burndown + remaining-work list. */
-export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
+export default function RoadmapView({
+  roadmap,
+  fullscreen,
+  onToggleFull,
+  onExitFull,
+}: {
+  roadmap: RoadmapVals;
+  fullscreen?: boolean;
+  onToggleFull?: () => void;
+  onExitFull?: () => void;
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [chip, setChip] = useState<ChipState>(null);
   const [hover, setHover] = useState<{ tip: CalTip; x: number; y: number } | null>(null);
@@ -56,7 +67,8 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (chip) setChip(null);
-      else setExpanded(null);
+      else if (expanded) setExpanded(null);
+      else onExitFull?.(); // bottom layer: leave fullscreen mode
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -64,7 +76,7 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [chip]);
+  }, [chip, expanded, onExitFull]);
 
   const COL = "268px minmax(0,1fr)"; // left KPI column + date-axis track
 
@@ -77,7 +89,19 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
       {/* header */}
       <div style={S("display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px;")}>
         <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>マイルストーンの進み具合</h2>
-        <span style={S("font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{roadmap.spanLabel}</span>
+        <div style={S("display:flex; align-items:center; gap:10px;")}>
+          <span style={S("font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{roadmap.spanLabel}</span>
+          {onToggleFull && (
+            <button
+              style={seg(!!fullscreen)}
+              onClick={onToggleFull}
+              aria-pressed={!!fullscreen}
+              title={fullscreen ? "全画面を解除（Esc）" : "ツールバーとロードマップだけを全画面表示"}
+            >
+              {fullscreen ? "✕ 全画面解除" : "⛶ 全画面"}
+            </button>
+          )}
+        </div>
       </div>
       <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>
         バーは start→due（縦線が本日、濃い部分が経過）。tick は<b style={{ color: "rgb(242 242 242)" }}>未完</b>イシューの締切（

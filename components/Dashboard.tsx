@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import {
   DAY,
   DEFAULT_GROUP_BY,
@@ -14,6 +14,26 @@ import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
 import RoadmapView from "@/components/RoadmapView";
+
+/** Toolbar+view wrapper for the calendar/roadmap tabs. Always mounted (so the
+ *  view's selection/popover state survives the toggle); in fullscreen it turns
+ *  into a viewport-filling fixed overlay above the page (z 40, below the
+ *  popover/tooltip layers at 60/70). */
+const fsWrap = (on: boolean): CSSProperties => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: "20px", // matches the main grid's gap
+  minWidth: 0,
+  ...(on && {
+    position: "fixed" as const,
+    inset: 0,
+    zIndex: 40,
+    background: "rgb(16 16 16)",
+    overflow: "auto",
+    padding: "16px 20px",
+    boxSizing: "border-box" as const,
+  }),
+});
 
 /** Full-height dark shell used for the loading / error states. */
 function Screen({ children }: { children: React.ReactNode }) {
@@ -57,6 +77,7 @@ export default function Dashboard() {
     panel: "ranking",
     calMode: "twoweek",
     calAnchor: Math.floor(Date.now() / DAY),
+    fullscreen: false,
   });
   const patch: Patch = (p) =>
     setSt((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
@@ -68,6 +89,14 @@ export default function Dashboard() {
       // storage blocked — the setting just won't survive a reload
     }
   }, [st.hiddenDows]);
+
+  // Fullscreen focus mode: lock the page scroll behind the fixed overlay.
+  useEffect(() => {
+    document.body.style.overflow = st.fullscreen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [st.fullscreen]);
 
   useEffect(() => {
     let alive = true;
@@ -378,8 +407,15 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <FilterControls v={v} st={st} showSort={false} />
-            <CalendarView cal={v.calendar} />
+            <div style={fsWrap(st.fullscreen)}>
+              <FilterControls v={v} st={st} showSort={false} />
+              <CalendarView
+                cal={v.calendar}
+                fullscreen={st.fullscreen}
+                onToggleFull={() => patch((s) => ({ fullscreen: !s.fullscreen }))}
+                onExitFull={() => patch({ fullscreen: false })}
+              />
+            </div>
           </>
         )}
 
@@ -417,8 +453,15 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <FilterControls v={v} st={st} showSort={false} showStatus={false} summary={v.roadmap.filterSummary} />
-            <RoadmapView roadmap={v.roadmap} />
+            <div style={fsWrap(st.fullscreen)}>
+              <FilterControls v={v} st={st} showSort={false} showStatus={false} summary={v.roadmap.filterSummary} />
+              <RoadmapView
+                roadmap={v.roadmap}
+                fullscreen={st.fullscreen}
+                onToggleFull={() => patch((s) => ({ fullscreen: !s.fullscreen }))}
+                onExitFull={() => patch({ fullscreen: false })}
+              />
+            </div>
           </>
         )}
       </div>

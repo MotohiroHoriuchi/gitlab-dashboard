@@ -80,6 +80,7 @@ export interface DashState {
   panel: Panel;
   calMode: CalMode;
   calAnchor: number; // UTC day-index (floor(ms/DAY)) of the anchor day
+  fullscreen: boolean; // calendar/roadmap: toolbar+view overlay the whole viewport (not persisted)
 }
 
 /** A label with its color + frequency, derived from the fetched issues (used
