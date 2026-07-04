@@ -1119,7 +1119,7 @@ function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
     fontFamily: SANS,
     fontWeight: 700,
     lineHeight: 1,
-    color: rgb(T.muted),
+    color: rgb(T.body),
     background: rgb(T.strong),
     border: "1px solid " + rgba(T.hairline, 0.9),
     cursor: "pointer",
@@ -1632,7 +1632,7 @@ export function buildCalendar(
           color: isToday
             ? rgb(T.primary)
             : isOtherMonth
-              ? rgba(T.mutedSoft, 0.5)
+              ? rgba(T.muted, 0.55)
               : isWeekend
                 ? rgb(T.muted)
                 : rgb(T.body),

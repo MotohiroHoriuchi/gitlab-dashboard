@@ -96,7 +96,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    "padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:rgb(110 118 129);",
+    "padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:rgb(189 189 189);",
   );
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
@@ -157,7 +157,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
       {/* ── legend ── */}
       <div
         style={S(
-          "display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:rgb(139 148 158);",
+          "display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:rgb(189 189 189);",
         )}
       >
         <Swatch style={{ background: rgba("176 131 240", 0.2), border: "1px solid " + rgba("176 131 240", 0.6) }} text="マイルストーン" />
@@ -186,7 +186,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
             border: "none",
             background: "transparent",
             cursor: "pointer",
-            color: rgb(T.muted),
+            color: rgb(T.body),
             fontSize: "11.5px",
             fontFamily: SANS,
           }}
@@ -198,7 +198,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
         </button>
         {/* non-working-day toggles: click a weekday chip to hide/show its column */}
         <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
-          <span style={S("font-size:11.5px; color:rgb(110 118 129);")}>表示曜日</span>
+          <span style={S("font-size:11.5px; color:rgb(139 148 158);")}>表示曜日</span>
           {cal.dowToggles.map((t) => (
             <button
               type="button"
@@ -391,7 +391,7 @@ function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px" }}>
         {tip.rows.map((r, i) => (
           <div key={i} style={{ display: "contents" }}>
-            <span style={{ fontSize: "11.5px", color: rgb(T.mutedSoft) }}>{r.k}</span>
+            <span style={{ fontSize: "11.5px", color: rgb(T.muted) }}>{r.k}</span>
             <span style={{ fontSize: "12.5px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
               {r.v}
             </span>
@@ -501,7 +501,7 @@ function DayPopover({
                   </span>
                   {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "12px" }}>★</span>}
                 </div>
-                <div style={{ marginTop: "2px", fontSize: "11.5px", color: rgb(T.mutedSoft) }}>
+                <div style={{ marginTop: "2px", fontSize: "11.5px", color: rgb(T.muted) }}>
                   <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
                   {metaRest(it) && <span> · {metaRest(it)}</span>}
                   {it.varianceLabel && (
@@ -512,7 +512,7 @@ function DayPopover({
                   )}
                 </div>
                 {it.relLine && (
-                  <div style={{ marginTop: "1px", fontSize: "10.5px", color: rgb(T.mutedSoft) }}>
+                  <div style={{ marginTop: "1px", fontSize: "10.5px", color: rgb(T.muted) }}>
                     {it.relLine}
                   </div>
                 )}

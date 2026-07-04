@@ -65,7 +65,7 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
       {/* header */}
       <div style={S("display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px;")}>
         <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>マイルストーンの進み具合</h2>
-        <span style={S("font-size:11.5px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{roadmap.spanLabel}</span>
+        <span style={S("font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{roadmap.spanLabel}</span>
       </div>
       <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>
         バーは start→due（縦線が本日、濃い部分が経過）。tick は<b style={{ color: "rgb(242 242 242)" }}>未完</b>イシューの締切（
@@ -135,12 +135,12 @@ function KpiColumn({ row }: { row: RoadmapRow }) {
         </div>
         <span style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(tone), fontFamily: MONO, flex: "0 0 auto" }}>{row.pct}%</span>
       </div>
-      <div style={{ marginTop: "4px", fontSize: "11.5px", color: rgb(T.mutedSoft), fontFamily: MONO }}>
+      <div style={{ marginTop: "4px", fontSize: "11.5px", color: rgb(T.muted), fontFamily: MONO }}>
         {row.hasSchedule || row.total > 0 ? `完了 ${row.done}/${row.total}` : "日程未設定"}
         {row.remaining > 0 && ` · 残${row.remaining}`}
         {row.overdue > 0 && <span style={{ color: rgb(T.warn), fontWeight: 700 }}> · 超過{row.overdue}</span>}
         {row.remainLabel !== "—" && (
-          <span style={{ color: row.remainLabel.startsWith("超過") ? rgb(T.err) : rgb(T.mutedSoft) }}> · {row.remainLabel}</span>
+          <span style={{ color: row.remainLabel.startsWith("超過") ? rgb(T.err) : rgb(T.muted) }}> · {row.remainLabel}</span>
         )}
       </div>
       {row.spark.hasData && (
@@ -238,8 +238,8 @@ function Expanded({ row }: { row: RoadmapRow }) {
       <div style={{ flex: "1 1 380px", minWidth: 0 }}>
         <div style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
           バーンダウン
-          <span style={{ marginLeft: "10px", fontWeight: 400, color: rgb(T.mutedSoft), fontSize: "11.5px" }}>
-            <span style={{ color: rgb(tone) }}>実線</span>=残数 · <span style={{ color: rgb(T.mutedSoft) }}>破線</span>=理想 · <span style={{ color: rgba(MS_COLOR, 0.9) }}>薄線</span>=総スコープ
+          <span style={{ marginLeft: "10px", fontWeight: 400, color: rgb(T.muted), fontSize: "11.5px" }}>
+            <span style={{ color: rgb(tone) }}>実線</span>=残数 · <span style={{ color: rgb(T.muted) }}>破線</span>=理想 · <span style={{ color: rgba(MS_COLOR, 0.9) }}>薄線</span>=総スコープ
           </span>
         </div>
         {b.hasData ? (
@@ -247,18 +247,18 @@ function Expanded({ row }: { row: RoadmapRow }) {
             {b.yLabels.map((yl, i) => (
               <g key={i}>
                 <line x1="34" y1={yl.y} x2={CHART_W - 12} y2={yl.y} stroke={rgba(T.hairline, 0.5)} strokeWidth="1" />
-                <text x="30" y={yl.y + 4} textAnchor="end" fontSize="12" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{yl.label}</text>
+                <text x="30" y={yl.y + 4} textAnchor="end" fontSize="12" fill={rgb(T.muted)} fontFamily={MONO}>{yl.label}</text>
               </g>
             ))}
             {b.xLabels.map((xl, i) => (
-              <text key={i} x={xl.x} y={CHART_H - 6} textAnchor={i === 0 ? "start" : i === b.xLabels.length - 1 ? "end" : "middle"} fontSize="12" fill={rgb(T.mutedSoft)} fontFamily={MONO}>{xl.label}</text>
+              <text key={i} x={xl.x} y={CHART_H - 6} textAnchor={i === 0 ? "start" : i === b.xLabels.length - 1 ? "end" : "middle"} fontSize="12" fill={rgb(T.muted)} fontFamily={MONO}>{xl.label}</text>
             ))}
             <polyline points={b.scopePoints} fill="none" stroke={rgba(MS_COLOR, 0.7)} strokeWidth="1.5" />
             <polyline points={b.idealPoints} fill="none" stroke={rgba(T.mutedSoft, 0.8)} strokeWidth="1.5" strokeDasharray="5 3" />
             <polyline points={b.actualPoints} fill="none" stroke={rgb(tone)} strokeWidth="2.5" />
           </svg>
         ) : (
-          <div style={S("padding:20px 0; font-size:12px; color:rgb(110 118 129);")}>このマイルストーンにはイシューがありません。</div>
+          <div style={S("padding:20px 0; font-size:12px; color:rgb(139 148 158);")}>このマイルストーンにはイシューがありません。</div>
         )}
       </div>
 
@@ -275,7 +275,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
 
 function Bucket({ title, tone, refs }: { title: string; tone: "err" | "warn" | "neutral"; refs: RoadmapIssueRef[] }) {
   if (!refs.length) return null;
-  const col = tone === "err" ? T.err : tone === "warn" ? T.warn : T.mutedSoft;
+  const col = tone === "err" ? T.err : tone === "warn" ? T.warn : T.muted;
   return (
     <div style={{ marginBottom: "9px" }}>
       <div style={{ fontSize: "10.5px", fontWeight: 700, color: rgb(col), textTransform: "uppercase", letterSpacing: ".04em", marginBottom: "3px" }}>
@@ -284,7 +284,7 @@ function Bucket({ title, tone, refs }: { title: string; tone: "err" | "warn" | "
       <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
         {refs.map((r) => (
           <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: rgb(T.body), minWidth: 0 }}>
-            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
+            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.muted), flex: "0 0 auto" }}>#{r.id}</span>
             {r.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), flex: "0 0 auto" }}>★</span>}
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
             <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10.5px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
@@ -324,7 +324,7 @@ function ChipPopover({ chip, innerRef, onClose }: { chip: NonNullable<ChipState>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
         {chip.refs.map((r) => (
           <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: rgb(T.body), minWidth: 0 }}>
-            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.mutedSoft), flex: "0 0 auto" }}>#{r.id}</span>
+            <span style={{ fontFamily: MONO, fontSize: "11.5px", color: rgb(T.muted), flex: "0 0 auto" }}>#{r.id}</span>
             {r.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), flex: "0 0 auto" }}>★</span>}
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
             <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: "10.5px", color: rgb(toneColor(r.tone)), flex: "0 0 auto" }}>{r.dueLabel}</span>
@@ -343,7 +343,7 @@ function edgeAnchor(x: number): { left: string; transform: string; textAlign: CS
 }
 function monthLabelStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "11.5px", color: rgb(T.mutedSoft), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "11.5px", fontWeight: 600, color: rgb(T.muted), fontFamily: MONO, whiteSpace: "nowrap" };
 }
 function todayLabelStyle(x: number): CSSProperties {
   const a = edgeAnchor(x);
@@ -365,7 +365,7 @@ function moreChipStyle(x: number): CSSProperties {
     fontSize: "10.5px",
     fontWeight: 700,
     fontFamily: SANS,
-    color: rgb(T.muted),
+    color: rgb(T.body),
     background: rgb(T.strong),
     border: "1px solid " + rgba(T.hairline, 0.9),
     cursor: "pointer",
