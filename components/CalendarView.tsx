@@ -2,7 +2,6 @@
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import {
-  MONO,
   SANS,
   S,
   T,
@@ -22,6 +21,7 @@ import {
   type CalVals,
 } from "@/lib/logic";
 import { useViewportClamp } from "@/components/useViewportClamp";
+import HoverTip, { dot } from "@/components/HoverTip";
 
 type HoverState = { tip: CalTip; x: number; y: number } | null;
 type DayState = { dayLabel: string; items: CalDayItem[]; x: number; y: number } | null;
@@ -313,7 +313,7 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
         </div>
       )}
 
-      {hover && <BarTooltip hover={hover} />}
+      {hover && <HoverTip tip={hover.tip} x={hover.x} y={hover.y} />}
       {day && (
         <DayPopover
           day={day}
@@ -328,77 +328,6 @@ export default function CalendarView({ cal }: { cal: CalVals }) {
         />
       )}
     </section>
-  );
-}
-
-/* ── hover tooltip for a single bar ── */
-function BarTooltip({ hover }: { hover: NonNullable<HoverState> }) {
-  const { tip, x, y } = hover;
-  const boxRef = useRef<HTMLDivElement>(null);
-  const { left, top } = useViewportClamp(boxRef, x, y);
-  const box: CSSProperties = {
-    position: "fixed",
-    left,
-    top,
-    zIndex: 60,
-    pointerEvents: "none",
-    minWidth: "180px",
-    maxWidth: "280px",
-    background: rgb(T.canvasSoft),
-    border: "1px solid " + rgb(T.hairline),
-    borderRadius: "8px",
-    boxShadow: "0 10px 30px rgba(0,0,0,.55)",
-    padding: "9px 11px",
-    fontFamily: SANS,
-  };
-  return (
-    <div ref={boxRef} style={box}>
-      <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "6px" }}>
-        <span style={dot(tip.color)} />
-        <span
-          style={{
-            flex: "1 1 auto",
-            minWidth: 0,
-            fontSize: "13.5px",
-            fontWeight: 700,
-            color: rgb(T.ink),
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {tip.title}
-        </span>
-      </div>
-      {tip.labelName && (
-        <span
-          style={{
-            display: "inline-block",
-            marginBottom: "6px",
-            padding: "2px 8px",
-            borderRadius: "999px",
-            fontSize: "10.5px",
-            fontWeight: 600,
-            fontFamily: MONO,
-            background: rgba(tip.color, 0.16),
-            color: rgb(tip.color),
-            border: "1px solid " + rgba(tip.color, 0.32),
-          }}
-        >
-          {tip.labelName}
-        </span>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px" }}>
-        {tip.rows.map((r, i) => (
-          <div key={i} style={{ display: "contents" }}>
-            <span style={{ fontSize: "11.5px", color: rgb(T.muted) }}>{r.k}</span>
-            <span style={{ fontSize: "12.5px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
-              {r.v}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -524,14 +453,6 @@ function DayPopover({
     </div>
   );
 }
-
-const dot = (color: string): CSSProperties => ({
-  width: "10px",
-  height: "10px",
-  borderRadius: "2px",
-  background: rgb(color),
-  flex: "0 0 auto",
-});
 
 function statusColor(status: CalDayItem["status"]): string {
   return status === "open" ? T.primary : status === "closed" ? T.muted : "176 131 240";

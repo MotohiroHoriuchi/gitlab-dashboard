@@ -1916,6 +1916,7 @@ export interface RoadmapTick {
   isCheckpoint: boolean;
   title: string;
   dueLabel: string;
+  tip: CalTip; // rich hover content (HoverTip)
 }
 export interface RoadmapIssueRef {
   id: number;
@@ -1929,6 +1930,7 @@ export interface RoadmapMoreChip {
   count: number;
   label: string; // "+N"
   refs: RoadmapIssueRef[];
+  tip: CalTip; // rich hover content (HoverTip)
 }
 export interface RoadmapBuckets {
   overdue: RoadmapIssueRef[]; // due before today
@@ -1968,6 +1970,7 @@ export interface RoadmapRow {
   overdue: number;
   remainLabel: string; // "残N日" / "超過N日" / "本日期限" / "—"
   healthTone: VarianceTone;
+  tip: CalTip; // shared hover tip (lane bar / due marker / KPI title)
   // track
   bar: RoadmapBar | null; // null for a dateless, issue-less milestone
   dueX: number | null; // due-date marker on the track
@@ -2072,6 +2075,26 @@ function toPolyline(
       return `${roundHalf(x)},${roundHalf(y)}`;
     })
     .join(" ");
+}
+
+/** Hover tip for an unfinished-issue tick (mirrors buildTip's row layout). */
+function roadmapTickTip(it: Issue, due: number, v: ScheduleVariance): CalTip {
+  const rows: CalTip["rows"] = [
+    { k: "担当者", v: it.assignee || "—" },
+    { k: "状態", v: "進行中" },
+    { k: "期限", v: fmtMD(due) },
+  ];
+  if (v.status !== "none") rows.push({ k: "予実", v: v.label, tone: v.tone });
+  return { title: `#${it.id} ${it.title}`, labelName: it.label.name, color: it.label.color, rows };
+}
+
+/** Hover tip for the "+N" chip: the collapsed refs, capped like iidList. */
+function moreChipTip(refs: RoadmapIssueRef[]): CalTip {
+  const rows: CalTip["rows"] = refs
+    .slice(0, 6)
+    .map((r) => ({ k: `#${r.id}`, v: `${r.title} · ${r.dueLabel}` }));
+  if (refs.length > 6) rows.push({ k: "", v: `…他${refs.length - 6}件` });
+  return { title: `+${refs.length} 件（期限が先の未完）`, labelName: null, color: MILESTONE_COLOR, rows };
 }
 
 const midX = (xs: number[]): number => {
@@ -2223,17 +2246,20 @@ export function buildMilestoneCalendar(
           isCheckpoint: it.isCheckpoint,
           title: it.title,
           dueLabel: fmtMD(due),
+          tip: roadmapTickTip(it, due, v),
         });
       } else {
         collapsed.push({ ref: toRef(it), x: xOf(due) });
       }
     }
+    const chipRefs = collapsed.map((c) => c.ref);
     const moreChip: RoadmapMoreChip | null = collapsed.length
       ? {
           x: midX(collapsed.map((c) => c.x)),
           count: collapsed.length,
           label: `+${collapsed.length}`,
-          refs: collapsed.map((c) => c.ref),
+          refs: chipRefs,
+          tip: moreChipTip(chipRefs),
         }
       : null;
 
@@ -2252,6 +2278,22 @@ export function buildMilestoneCalendar(
     buckets.later.sort(byId);
 
     // burndown (reconstructed) — mini sparkline + expanded chart geometry
+    // shared milestone tip — the lane bar, due marker and KPI title all show it
+    const memberIids = subset.map((i) => i.id);
+    const tipRows: CalTip["rows"] = [{ k: "状態", v: m.state === "closed" ? "完了" : "進行中" }];
+    if (start !== null && end !== null) tipRows.push({ k: "期間", v: calRange(start, end) });
+    if (dueDay !== null)
+      tipRows.push({
+        k: "期限",
+        v: fmtMD(dueDay) + (remainLabel !== "—" ? `（${remainLabel}）` : ""),
+        tone: healthTone,
+      });
+    if (total > 0) tipRows.push({ k: "進捗", v: `${done}/${total} 件（${pct}%）` });
+    if (remaining > 0)
+      tipRows.push({ k: "残作業", v: `${remaining} 件` + (overdue > 0 ? `（超過 ${overdue}）` : "") });
+    if (memberIids.length) tipRows.push({ k: "配下", v: iidList(memberIids) });
+    const tip: CalTip = { title: m.title, labelName: null, color: MILESTONE_COLOR, rows: tipRows };
+
     const bd = start !== null && end !== null ? reconstructBurndown(subset, start, end) : [];
     const sparkYMax = Math.max(1, ...bd.map((q) => q.total));
     const spark: RoadmapSpark = {
@@ -2274,6 +2316,7 @@ export function buildMilestoneCalendar(
       overdue,
       remainLabel,
       healthTone,
+      tip,
       bar,
       dueX,
       ticks,
@@ -2281,7 +2324,7 @@ export function buildMilestoneCalendar(
       spark,
       burndown,
       buckets,
-      memberIids: subset.map((i) => i.id),
+      memberIids,
     };
   });
 

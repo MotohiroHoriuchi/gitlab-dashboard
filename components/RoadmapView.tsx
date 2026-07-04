@@ -9,11 +9,13 @@ import {
   rgb,
   rgba,
   toneColor,
+  type CalTip,
   type RoadmapIssueRef,
   type RoadmapRow,
   type RoadmapVals,
 } from "@/lib/logic";
 import { useViewportClamp } from "@/components/useViewportClamp";
+import HoverTip from "@/components/HoverTip";
 
 const MS_COLOR = "176 131 240"; // milestone purple (mirrors buildCalendar)
 const CHECKPOINT_STAR = "255 199 74";
@@ -31,7 +33,17 @@ type ChipState = { refs: RoadmapIssueRef[]; x: number; y: number } | null;
 export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [chip, setChip] = useState<ChipState>(null);
+  const [hover, setHover] = useState<{ tip: CalTip; x: number; y: number } | null>(null);
   const chipRef = useRef<HTMLDivElement>(null);
+
+  // Raw cursor offsets only — HoverTip clamps to the viewport itself (mirrors
+  // CalendarView's showTip). Suppressed while the "+N" popover is open so the
+  // tooltip never lingers behind it.
+  const showTip = (e: React.MouseEvent, tip: CalTip) => {
+    if (chip) return;
+    setHover({ tip, x: e.clientX + 14, y: e.clientY + 14 });
+  };
+  const hideTip = () => setHover(null);
 
   // outside-click / Escape closes the "+N" popover first, then the expansion
   // (mirrors CalendarView's overlay handling).
@@ -105,27 +117,52 @@ export default function RoadmapView({ roadmap }: { roadmap: RoadmapVals }) {
                 transition: "background .15s",
               }}
             >
-              <KpiColumn row={row} />
-              <Track row={row} todayX={roadmap.todayX} weekStepPct={roadmap.weekStepPct} gridLines={roadmap.gridLines} onChip={setChip} />
+              <KpiColumn row={row} onTip={showTip} onTipEnd={hideTip} />
+              <Track
+                row={row}
+                todayX={roadmap.todayX}
+                weekStepPct={roadmap.weekStepPct}
+                gridLines={roadmap.gridLines}
+                onChip={(c) => {
+                  setChip(c);
+                  hideTip();
+                }}
+                onTip={showTip}
+                onTipEnd={hideTip}
+              />
             </div>
             {expanded === row.key && <Expanded row={row} />}
           </div>
         ))
       )}
 
+      {hover && <HoverTip tip={hover.tip} x={hover.x} y={hover.y} />}
       {chip && <ChipPopover chip={chip} innerRef={chipRef} onClose={() => setChip(null)} />}
     </section>
   );
 }
 
 /* ── left column: title + health + progress + KPIs + mini burndown ── */
-function KpiColumn({ row }: { row: RoadmapRow }) {
+function KpiColumn({
+  row,
+  onTip,
+  onTipEnd,
+}: {
+  row: RoadmapRow;
+  onTip: (e: React.MouseEvent, tip: CalTip) => void;
+  onTipEnd: () => void;
+}) {
   const tone = toneColor(row.healthTone);
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto", boxShadow: "0 0 6px " + rgba(tone, 0.6) }} />
-        <span style={{ minWidth: 0, fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{ minWidth: 0, fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          onMouseEnter={(e) => onTip(e, row.tip)}
+          onMouseMove={(e) => onTip(e, row.tip)}
+          onMouseLeave={onTipEnd}
+        >
           {row.title}
         </span>
       </div>
@@ -160,12 +197,16 @@ function Track({
   weekStepPct,
   gridLines,
   onChip,
+  onTip,
+  onTipEnd,
 }: {
   row: RoadmapRow;
   todayX: number | null;
   weekStepPct: number;
   gridLines: RoadmapVals["gridLines"];
   onChip: (c: ChipState) => void;
+  onTip: (e: React.MouseEvent, tip: CalTip) => void;
+  onTipEnd: () => void;
 }) {
   const trackStyle: CSSProperties = {
     position: "relative",
@@ -193,15 +234,29 @@ function Track({
             border: "1px solid " + rgba(MS_COLOR, 0.6),
             background: `linear-gradient(90deg, ${rgba(MS_COLOR, 0.5)} 0 ${row.bar.elapsedPct}%, ${rgba(MS_COLOR, 0.14)} ${row.bar.elapsedPct}% 100%)`,
           }}
+          onMouseEnter={(e) => onTip(e, row.tip)}
+          onMouseMove={(e) => onTip(e, row.tip)}
+          onMouseLeave={onTipEnd}
         />
       )}
       {row.dueX !== null && (
-        <div style={{ position: "absolute", top: "4px", height: "28px", left: row.dueX + "%", width: "0", borderLeft: "2px dotted " + rgba(T.ink, 0.7) }} title="期限" />
+        <div
+          style={{ position: "absolute", top: "4px", height: "28px", left: row.dueX + "%", width: "0", borderLeft: "2px dotted " + rgba(T.ink, 0.7) }}
+          onMouseEnter={(e) => onTip(e, row.tip)}
+          onMouseMove={(e) => onTip(e, row.tip)}
+          onMouseLeave={onTipEnd}
+        />
       )}
 
       {/* unfinished ticks (individually labeled) */}
       {row.ticks.map((t) => (
-        <div key={t.id} style={{ position: "absolute", left: t.x + "%", bottom: "3px", zIndex: 1 }} title={`#${t.id} ${t.title}（${t.dueLabel}）`}>
+        <div
+          key={t.id}
+          style={{ position: "absolute", left: t.x + "%", bottom: "3px", zIndex: 1 }}
+          onMouseEnter={(e) => onTip(e, t.tip)}
+          onMouseMove={(e) => onTip(e, t.tip)}
+          onMouseLeave={onTipEnd}
+        >
           <div style={tickLabelStyle(t.x)}>
             {t.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR) }}>★</span>} #{t.id}
           </div>
@@ -220,7 +275,9 @@ function Track({
             onChip({ refs: row.moreChip!.refs, x: e.clientX + 10, y: e.clientY + 10 });
           }}
           style={{ ...moreChipStyle(row.moreChip.x), zIndex: 3 }}
-          title="残りの未完イシュー"
+          onMouseEnter={(e) => onTip(e, row.moreChip!.tip)}
+          onMouseMove={(e) => onTip(e, row.moreChip!.tip)}
+          onMouseLeave={onTipEnd}
         >
           {row.moreChip.label}
         </div>

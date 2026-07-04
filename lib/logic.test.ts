@@ -930,4 +930,33 @@ describe("buildMilestoneCalendar", () => {
     expect(row.total).toBe(0);
     expect(row.spark.hasData).toBe(false);
   });
+
+  it("attaches hover tips to ticks, the +N chip, and the row", () => {
+    const row = buildMilestoneCalendar(subset(), [ms], TODAY, "checkpoint").rows[0];
+    // tick tip: issue title + assignee / status / due / variance rows
+    const tick = row.ticks.find((t) => t.id === 12)!;
+    expect(tick.tip.title).toBe("#12 t");
+    expect(tick.tip.rows.map((r) => r.k)).toEqual(["担当者", "状態", "期限", "予実"]);
+    expect(tick.tip.rows.find((r) => r.k === "期限")!.v).toBe("6/28");
+    // chip tip lists the collapsed refs
+    expect(row.moreChip!.tip.title).toBe("+1 件（期限が先の未完）");
+    expect(row.moreChip!.tip.rows).toEqual([{ k: "#14", v: "t · 7/20" }]);
+    // row tip carries schedule + progress + members
+    expect(row.tip.title).toBe("MS");
+    const rowVals = Object.fromEntries(row.tip.rows.map((r) => [r.k, r.v]));
+    expect(rowVals["状態"]).toBe("進行中");
+    expect(rowVals["進捗"]).toBe("2/7 件（29%）");
+    expect(rowVals["残作業"]).toBe("5 件（超過 1）");
+    expect(rowVals["配下"]).toContain("#10");
+  });
+
+  it("caps the chip tip at 6 rows with an …他N件 tail", () => {
+    const many = Array.from({ length: 8 }, (_, i) =>
+      mkIssue({ id: 30 + i, milestone: "MS", isOpen: true, createdAt: "2026-06-24", dueDate: "2026-08-10" }),
+    );
+    const row = buildMilestoneCalendar(many, [ms], TODAY, "checkpoint").rows[0];
+    expect(row.moreChip!.count).toBe(8);
+    expect(row.moreChip!.tip.rows.length).toBe(7); // 6 refs + tail
+    expect(row.moreChip!.tip.rows[6]).toEqual({ k: "", v: "…他2件" });
+  });
 });
