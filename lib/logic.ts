@@ -352,8 +352,10 @@ export interface Vals {
   showRank: boolean;
   showDist: boolean;
   showCal: boolean;
-  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn };
+  showRoadmap: boolean;
+  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn; roadmap: Btn };
   calendar: CalVals;
+  roadmap: RoadmapVals;
   labelOptions: FilterOption[];
   assigneeOptions: FilterOption[];
   milestoneOptions: FilterOption[];
@@ -442,15 +444,20 @@ export function renderVals(
   const showRank = st.panel === "ranking";
   const showDist = st.panel === "dist";
   const showCal = st.panel === "calendar";
+  const showRoadmap = st.panel === "roadmap";
   const todayIndex = dayIndex(meta.asOf);
   const setS = (p: Partial<DashState>) => () => patch(p);
 
   // ── filtering ──
-  const pass = (it: Issue) =>
-    (st.status === "all" || (st.status === "open" ? it.isOpen : !it.isOpen)) &&
+  // passScope = label/assignee/milestone (status-independent). The roadmap needs
+  // both open AND closed issues to compute progress/burndown, so it filters on
+  // passScope only; every other view adds the status predicate on top.
+  const passScope = (it: Issue) =>
     (st.labels.length === 0 || issueFilterLabels(it).some((n) => st.labels.includes(n))) &&
     (st.assignees.length === 0 || st.assignees.includes(it.assignee)) &&
     (st.milestones.length === 0 || st.milestones.includes(it.milestone));
+  const pass = (it: Issue) =>
+    (st.status === "all" || (st.status === "open" ? it.isOpen : !it.isOpen)) && passScope(it);
   const filtered = data.filter(pass);
   // Calendar reuses the same filtered issue set. Milestone bars follow the
   // milestone filter (only the selected ones stay); other filters leave them.
@@ -463,6 +470,12 @@ export function renderVals(
     calMilestones,
     st,
     patch,
+    todayIndex,
+    meta.checkpointLabel,
+  );
+  const roadmap = buildMilestoneCalendar(
+    data.filter(passScope),
+    calMilestones,
     todayIndex,
     meta.checkpointLabel,
   );
@@ -917,12 +930,15 @@ export function renderVals(
     showRank,
     showDist,
     showCal,
+    showRoadmap,
     panelTabs: {
       ranking: { style: seg(st.panel === "ranking"), onClick: setS({ panel: "ranking" }) },
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
       calendar: { style: seg(st.panel === "calendar"), onClick: setS({ panel: "calendar" }) },
+      roadmap: { style: seg(st.panel === "roadmap"), onClick: setS({ panel: "roadmap" }) },
     },
     calendar,
+    roadmap,
     labelOptions,
     assigneeOptions,
     milestoneOptions,
@@ -975,9 +991,14 @@ interface CalItem {
   memberIids: number[]; // milestone only: iids of the filtered issues under it
 }
 
-const fmtMD = (idx: number): string => {
+export const fmtMD = (idx: number): string => {
   const d = new Date(idx * DAY);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+};
+/** "2026/7/8" — day-index to a full year/month/day label (roadmap span). */
+export const fmtYMD = (idx: number): string => {
+  const d = new Date(idx * DAY);
+  return `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
 
 /** Inclusive day-range label: single day, or "start – end". */
@@ -1846,5 +1867,466 @@ export function buildCalendar(
     legend: { checkpointLabel },
     summary: scheduleSummary(issues, todayIndex),
     relations: buildRelationIndex(issues, milestones),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ *  buildMilestoneCalendar — the roadmap view model
+ *
+ *  One lane per milestone on a continuous real-date axis (unlike the week-grid
+ *  calendar). Progress lives in the left KPI column; the track shows timing +
+ *  which issues are still unfinished; a per-milestone burndown (reconstructed
+ *  from created_at/closed_at — no stored snapshots) answers "on pace?".
+ * ------------------------------------------------------------------ */
+const NEAR_DAYS = 14; // an open issue due within ±this many days is labeled individually
+// mini sparkline (left column) + expanded chart geometry (viewBox units)
+const SPARK_W = 120,
+  SPARK_H = 32,
+  SPARK_PAD = 3;
+const CHART_W = 680,
+  CHART_H = 200,
+  CHART_PADL = 30,
+  CHART_PADR = 12,
+  CHART_PADT = 12,
+  CHART_PADB = 22;
+
+export interface RoadmapGridLine {
+  x: number; // 0..100
+  label: string | null;
+}
+export interface RoadmapTick {
+  id: number;
+  x: number; // 0..100
+  color: string; // "R G B"
+  isCheckpoint: boolean;
+  title: string;
+  dueLabel: string;
+}
+export interface RoadmapIssueRef {
+  id: number;
+  title: string;
+  dueLabel: string; // "7/8" or "期限なし"
+  tone: VarianceTone;
+  isCheckpoint: boolean;
+}
+export interface RoadmapMoreChip {
+  x: number; // 0..100 (median of the collapsed ticks)
+  count: number;
+  label: string; // "+N"
+  refs: RoadmapIssueRef[];
+}
+export interface RoadmapBuckets {
+  overdue: RoadmapIssueRef[]; // due before today
+  thisWeek: RoadmapIssueRef[]; // due today .. today+7
+  later: RoadmapIssueRef[]; // due later, or no due date
+}
+export interface RoadmapSpark {
+  hasData: boolean;
+  actual: string; // polyline points "x,y x,y …"
+  ideal: string;
+}
+export interface RoadmapBurndown {
+  hasData: boolean;
+  actualPoints: string;
+  idealPoints: string;
+  scopePoints: string; // total(d) — rises on scope creep
+  yMax: number;
+  xLabels: { x: number; label: string }[];
+  yLabels: { y: number; label: string }[];
+}
+export interface RoadmapBar {
+  left: number; // 0..100
+  width: number; // 0..100
+  elapsedPct: number; // today's position within [start,end] as 0..100 (today-split fill)
+}
+export interface RoadmapRow {
+  key: string; // calBarKey("milestone", id)
+  id: number;
+  title: string;
+  state: string;
+  hasSchedule: boolean; // milestone carries a start or due date
+  // KPIs (progress lives here, never on the date-axis track)
+  done: number;
+  total: number;
+  pct: number;
+  remaining: number;
+  overdue: number;
+  remainLabel: string; // "残N日" / "超過N日" / "本日期限" / "—"
+  healthTone: VarianceTone;
+  // track
+  bar: RoadmapBar | null; // null for a dateless, issue-less milestone
+  dueX: number | null; // due-date marker on the track
+  ticks: RoadmapTick[]; // unfinished issues (individually labeled)
+  moreChip: RoadmapMoreChip | null; // collapsed bulk of safe-future open issues
+  // burndown
+  spark: RoadmapSpark;
+  burndown: RoadmapBurndown;
+  // remaining-work panel
+  buckets: RoadmapBuckets;
+  memberIids: number[];
+}
+export interface RoadmapVals {
+  rows: RoadmapRow[];
+  gridLines: RoadmapGridLine[]; // month lines
+  weekStepPct: number; // week gridline spacing (repeating-linear-gradient)
+  todayX: number | null; // 0..100, null when out of span
+  spanLabel: string;
+  summary: ScheduleSummary;
+  relations: CalRelIndex; // reused for relation badges in the panel
+  filterSummary: string;
+  empty: boolean;
+  legend: { checkpointLabel: string };
+}
+
+export interface BurndownPoint {
+  day: number;
+  remaining: number; // open issues that already existed at day d
+  total: number; // scope at day d (issues created on/before d)
+  ideal: number; // linear scope→0 across the domain
+}
+
+/** Reconstruct a burndown purely from created_at/closed_at — no stored daily
+ *  snapshots. `remaining(d)` counts issues that existed by day d and were still
+ *  open then; `total(d)` is the scope at d (rises mid-domain on scope creep —
+ *  an issue created after the start). `ideal` is the straight scope→0 line.
+ *  Open issues without a due date still count toward remaining/total. */
+export function reconstructBurndown(
+  issues: Issue[],
+  domainStart: number,
+  domainEnd: number,
+): BurndownPoint[] {
+  const span = Math.max(1, domainEnd - domainStart);
+  const scope = issues.length;
+  const created = issues.map((i) => dayIndex(i.createdAt));
+  const closed = issues.map((i) => (!i.isOpen && i.closedAt ? dayIndex(i.closedAt) : null));
+  const out: BurndownPoint[] = [];
+  for (let d = domainStart; d <= domainEnd; d++) {
+    let remaining = 0,
+      total = 0;
+    for (let k = 0; k < issues.length; k++) {
+      if (created[k] <= d) {
+        total++;
+        const c = closed[k];
+        if (c === null || c > d) remaining++;
+      }
+    }
+    out.push({ day: d, remaining, total, ideal: Math.max(0, (scope * (domainEnd - d)) / span) });
+  }
+  return out;
+}
+
+/** Milestone health from the existing variance primitives. err = has overdue
+ *  open issues, or the due date passed with work remaining; warn = behind the
+ *  ideal pace (needs a due date) or has late-closed issues; else ok. */
+export function milestoneHealth(
+  subset: Issue[],
+  dueDay: number | null,
+  today: number,
+  remainingNow: number,
+  idealNow: number,
+): VarianceTone {
+  const s = scheduleSummary(subset, today);
+  if (s.overdue > 0) return "err";
+  if (dueDay !== null && today > dueDay && remainingNow > 0) return "err";
+  if (dueDay !== null && remainingNow > idealNow + 1e-9) return "warn";
+  if (s.late > 0) return "warn";
+  return "ok";
+}
+
+const roundHalf = (n: number): number => Math.round(n * 100) / 100;
+/** Sample points → an SVG polyline string, scaled into the padded viewBox. */
+function toPolyline(
+  pts: BurndownPoint[],
+  getY: (p: BurndownPoint) => number,
+  yMax: number,
+  w: number,
+  h: number,
+  padL: number,
+  padR: number,
+  padT: number,
+  padB: number,
+): string {
+  const n = pts.length;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const ymax = Math.max(1, yMax);
+  return pts
+    .map((p, i) => {
+      const x = padL + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
+      const y = padT + innerH - (getY(p) / ymax) * innerH;
+      return `${roundHalf(x)},${roundHalf(y)}`;
+    })
+    .join(" ");
+}
+
+const midX = (xs: number[]): number => {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/** Issues (label/assignee/milestone-filtered, NOT status-filtered) + milestones
+ *  → the roadmap view model. Pure; no `st`/`patch` (axis auto-fits, selection is
+ *  component-local). */
+export function buildMilestoneCalendar(
+  issues: Issue[],
+  milestones: Milestone[],
+  todayIndex: number,
+  checkpointLabel: string,
+): RoadmapVals {
+  // bucket issues by milestone title (same match as deriveMilestones)
+  const byTitle = new Map<string, Issue[]>();
+  for (const it of issues) {
+    const arr = byTitle.get(it.milestone);
+    if (arr) arr.push(it);
+    else byTitle.set(it.milestone, [it]);
+  }
+
+  interface Pre {
+    m: Milestone;
+    subset: Issue[];
+    start: number | null;
+    end: number | null;
+    dueDay: number | null;
+    hasSchedule: boolean;
+  }
+  const pre: Pre[] = milestones.map((m) => {
+    const subset = byTitle.get(m.title) ?? [];
+    const mStart = m.startDate ? dayIndex(m.startDate) : null;
+    const mDue = m.dueDate ? dayIndex(m.dueDate) : null;
+    const dueDay = mDue !== null && !Number.isNaN(mDue) ? mDue : null;
+    const hasSchedule = mStart !== null || mDue !== null;
+    const createds = subset.map((i) => dayIndex(i.createdAt)).filter((d) => !Number.isNaN(d));
+    const dues = subset
+      .map((i) => (i.dueDate ? dayIndex(i.dueDate) : NaN))
+      .filter((d) => !Number.isNaN(d));
+    const closeds = subset
+      .map((i) => (!i.isOpen && i.closedAt ? dayIndex(i.closedAt) : NaN))
+      .filter((d) => !Number.isNaN(d));
+    let start: number | null = mStart ?? (createds.length ? Math.min(...createds) : dueDay);
+    let end: number | null = dueDay ?? (dues.length ? Math.max(...dues) : mStart);
+    if (start === null && end === null) {
+      return { m, subset, start: null, end: null, dueDay, hasSchedule };
+    }
+    start = start ?? (end as number);
+    end = end ?? start;
+    // extend to cover the earliest scope (created before start) and today/latest
+    // activity, so the today line and full burndown always fit in the domain.
+    if (createds.length) start = Math.min(start, ...createds);
+    end = Math.max(end, todayIndex, ...dues, ...closeds);
+    if (end < start) end = start;
+    return { m, subset, start, end, dueDay, hasSchedule };
+  });
+
+  const withDomain = pre.filter((p) => p.start !== null && p.end !== null);
+  const spanStart = withDomain.length ? Math.min(...withDomain.map((p) => p.start as number)) : todayIndex;
+  const spanEnd = withDomain.length ? Math.max(...withDomain.map((p) => p.end as number)) : todayIndex;
+  const denom = Math.max(1, spanEnd - spanStart);
+  const xOf = (d: number): number => Math.max(0, Math.min(100, ((d - spanStart) / denom) * 100));
+
+  // month gridlines (labeled), starting at the first month boundary >= spanStart
+  const gridLines: RoadmapGridLine[] = [];
+  {
+    const ds = new Date(spanStart * DAY);
+    let idx = Math.floor(Date.UTC(ds.getUTCFullYear(), ds.getUTCMonth(), 1) / DAY);
+    if (idx < spanStart) idx = Math.floor(Date.UTC(ds.getUTCFullYear(), ds.getUTCMonth() + 1, 1) / DAY);
+    while (idx <= spanEnd) {
+      const dd = new Date(idx * DAY);
+      const mo = dd.getUTCMonth();
+      gridLines.push({ x: xOf(idx), label: mo === 0 ? `${dd.getUTCFullYear()}/1月` : `${mo + 1}月` });
+      idx = Math.floor(Date.UTC(dd.getUTCFullYear(), mo + 1, 1) / DAY);
+    }
+  }
+  const weekStepPct = (7 / denom) * 100;
+  const todayX = todayIndex >= spanStart && todayIndex <= spanEnd ? xOf(todayIndex) : null;
+
+  const toRef = (it: Issue): RoadmapIssueRef => {
+    const due = it.dueDate ? dayIndex(it.dueDate) : NaN;
+    const v = scheduleVariance(it, todayIndex);
+    return {
+      id: it.id,
+      title: it.title,
+      dueLabel: Number.isNaN(due) ? "期限なし" : fmtMD(due),
+      tone: v.tone,
+      isCheckpoint: it.isCheckpoint,
+    };
+  };
+
+  const rows: RoadmapRow[] = pre.map((p) => {
+    const { m, subset, start, end, dueDay, hasSchedule } = p;
+    const done = subset.filter((i) => !i.isOpen).length;
+    const total = subset.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const remaining = total - done;
+    const overdue = scheduleSummary(subset, todayIndex).overdue;
+    const remainLabel =
+      dueDay === null
+        ? "—"
+        : dueDay - todayIndex > 0
+          ? `残${dueDay - todayIndex}日`
+          : dueDay - todayIndex < 0
+            ? `超過${todayIndex - dueDay}日`
+            : "本日期限";
+    const scope = total;
+    const idealNow =
+      dueDay === null || start === null || end === null
+        ? 0
+        : todayIndex <= start
+          ? scope
+          : todayIndex >= end
+            ? 0
+            : (scope * (end - todayIndex)) / Math.max(1, end - start);
+    const healthTone = milestoneHealth(subset, dueDay, todayIndex, remaining, idealNow);
+
+    const bar: RoadmapBar | null =
+      start !== null && end !== null
+        ? {
+            left: xOf(start),
+            width: Math.max(0.4, xOf(end) - xOf(start)),
+            elapsedPct:
+              end === start ? 100 : Math.max(0, Math.min(100, ((todayIndex - start) / (end - start)) * 100)),
+          }
+        : null;
+    const dueX = dueDay !== null ? xOf(dueDay) : null;
+
+    // unfinished ticks: open issues with a due date. Overdue / checkpoint / due
+    // within NEAR_DAYS are labeled individually; the safe-future rest collapse.
+    const ticks: RoadmapTick[] = [];
+    const collapsed: { ref: RoadmapIssueRef; x: number }[] = [];
+    for (const it of subset) {
+      if (!it.isOpen || !it.dueDate) continue;
+      const due = dayIndex(it.dueDate);
+      if (Number.isNaN(due)) continue;
+      const v = scheduleVariance(it, todayIndex);
+      const labeled = v.status === "overdueOpen" || it.isCheckpoint || Math.abs(due - todayIndex) <= NEAR_DAYS;
+      if (labeled) {
+        ticks.push({
+          id: it.id,
+          x: xOf(due),
+          color: toneColor(v.tone),
+          isCheckpoint: it.isCheckpoint,
+          title: it.title,
+          dueLabel: fmtMD(due),
+        });
+      } else {
+        collapsed.push({ ref: toRef(it), x: xOf(due) });
+      }
+    }
+    const moreChip: RoadmapMoreChip | null = collapsed.length
+      ? {
+          x: midX(collapsed.map((c) => c.x)),
+          count: collapsed.length,
+          label: `+${collapsed.length}`,
+          refs: collapsed.map((c) => c.ref),
+        }
+      : null;
+
+    // remaining-work buckets (all open issues, incl. those with no due date)
+    const buckets: RoadmapBuckets = { overdue: [], thisWeek: [], later: [] };
+    for (const it of subset) {
+      if (!it.isOpen) continue;
+      const due = it.dueDate ? dayIndex(it.dueDate) : NaN;
+      if (!Number.isNaN(due) && due < todayIndex) buckets.overdue.push(toRef(it));
+      else if (!Number.isNaN(due) && due <= todayIndex + 7) buckets.thisWeek.push(toRef(it));
+      else buckets.later.push(toRef(it));
+    }
+    const byId = (a: RoadmapIssueRef, b: RoadmapIssueRef) => a.id - b.id;
+    buckets.overdue.sort(byId);
+    buckets.thisWeek.sort(byId);
+    buckets.later.sort(byId);
+
+    // burndown (reconstructed) — mini sparkline + expanded chart geometry
+    const bd = start !== null && end !== null ? reconstructBurndown(subset, start, end) : [];
+    const sparkYMax = Math.max(1, ...bd.map((q) => q.total));
+    const spark: RoadmapSpark = {
+      hasData: bd.length > 1 && total > 0,
+      actual: toPolyline(bd, (q) => q.remaining, sparkYMax, SPARK_W, SPARK_H, SPARK_PAD, SPARK_PAD, SPARK_PAD, SPARK_PAD),
+      ideal: toPolyline(bd, (q) => q.ideal, sparkYMax, SPARK_W, SPARK_H, SPARK_PAD, SPARK_PAD, SPARK_PAD, SPARK_PAD),
+    };
+    const burndown = buildBurndownChart(bd, total > 0, start, end);
+
+    return {
+      key: calBarKey("milestone", m.id),
+      id: m.id,
+      title: m.title,
+      state: m.state,
+      hasSchedule,
+      done,
+      total,
+      pct,
+      remaining,
+      overdue,
+      remainLabel,
+      healthTone,
+      bar,
+      dueX,
+      ticks,
+      moreChip,
+      spark,
+      burndown,
+      buckets,
+      memberIids: subset.map((i) => i.id),
+    };
+  });
+
+  // scheduled rows first, ordered by due (then bar start); dateless rows last.
+  rows.sort((a, b) => {
+    const as = a.bar !== null,
+      bs = b.bar !== null;
+    if (as !== bs) return as ? -1 : 1;
+    return (
+      (a.dueX ?? a.bar?.left ?? 0) - (b.dueX ?? b.bar?.left ?? 0) || a.title.localeCompare(b.title)
+    );
+  });
+
+  return {
+    rows,
+    gridLines,
+    weekStepPct,
+    todayX,
+    spanLabel: `${fmtYMD(spanStart)} 〜 ${fmtYMD(spanEnd)}`,
+    summary: scheduleSummary(issues, todayIndex),
+    relations: buildRelationIndex(issues, milestones),
+    filterSummary: `${milestones.length} マイルストーン / イシュー ${issues.length} 件`,
+    empty: pre.length === 0,
+    legend: { checkpointLabel },
+  };
+}
+
+/** Expanded burndown chart geometry (actual/ideal/scope polylines + axis
+ *  labels), scaled to the padded chart viewBox. Empty when < 2 sample days. */
+function buildBurndownChart(
+  bd: BurndownPoint[],
+  hasIssues: boolean,
+  start: number | null,
+  end: number | null,
+): RoadmapBurndown {
+  if (bd.length < 2 || !hasIssues || start === null || end === null) {
+    return { hasData: false, actualPoints: "", idealPoints: "", scopePoints: "", yMax: 1, xLabels: [], yLabels: [] };
+  }
+  const rawMax = Math.max(1, ...bd.map((p) => Math.max(p.total, p.remaining, p.ideal)));
+  const nice = makeTicks(rawMax);
+  const yMax = nice.niceMax;
+  const geom = (getY: (p: BurndownPoint) => number) =>
+    toPolyline(bd, getY, yMax, CHART_W, CHART_H, CHART_PADL, CHART_PADR, CHART_PADT, CHART_PADB);
+  const innerW = CHART_W - CHART_PADL - CHART_PADR;
+  const innerH = CHART_H - CHART_PADT - CHART_PADB;
+  const xLabels = [0, 0.5, 1].map((f) => ({
+    x: CHART_PADL + f * innerW,
+    label: fmtMD(Math.round(start + f * (end - start))),
+  }));
+  const yLabels = nice.ticks.map((v) => ({
+    y: CHART_PADT + innerH - (v / yMax) * innerH,
+    label: `${v}`,
+  }));
+  return {
+    hasData: true,
+    actualPoints: geom((p) => p.remaining),
+    idealPoints: geom((p) => p.ideal),
+    scopePoints: geom((p) => p.total),
+    yMax,
+    xLabels,
+    yLabels,
   };
 }

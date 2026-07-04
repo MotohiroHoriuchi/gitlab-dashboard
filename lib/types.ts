@@ -65,7 +65,7 @@ export interface ApiResponse {
 export type StatusFilter = "all" | "open" | "closed";
 export type SortMode = "linger" | "recent" | "oldest";
 export type GroupBy = "label" | "assignee" | "milestone";
-export type Panel = "ranking" | "dist" | "calendar";
+export type Panel = "ranking" | "dist" | "calendar" | "roadmap";
 export type CalMode = "month" | "twoweek";
 
 export interface DashState {

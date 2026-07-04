@@ -5,26 +5,33 @@ import type { DashState } from "@/lib/types";
 import FilterDropdown from "@/components/FilterDropdown";
 
 /** Shared filter bar: 状態 → (並べ替え, when showSort) → ラベル → 担当者 → マイルストーン → 該当件数.
- *  Used by the issue-list tab (showSort) and the calendar tab (no sort). */
+ *  Used by the issue-list tab (showSort), the calendar tab (no sort), and the
+ *  roadmap tab (no status — progress needs open+closed; own summary text). */
 export default function FilterControls({
   v,
   st,
   showSort,
+  showStatus = true,
+  summary,
 }: {
   v: Vals;
   st: DashState;
   showSort: boolean;
+  showStatus?: boolean;
+  summary?: string;
 }) {
   return (
     <div style={S("display:flex; flex-wrap:wrap; align-items:center; gap:14px 20px; padding:13px 16px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:12px;")}>
-      <div style={S("display:flex; align-items:center; gap:9px;")}>
-        <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>状態</span>
-        <div style={S("display:flex; gap:6px;")}>
-          <button style={v.statusBtns.all.style} onClick={v.statusBtns.all.onClick}>すべて</button>
-          <button style={v.statusBtns.open.style} onClick={v.statusBtns.open.onClick}>Open</button>
-          <button style={v.statusBtns.closed.style} onClick={v.statusBtns.closed.onClick}>Closed</button>
+      {showStatus && (
+        <div style={S("display:flex; align-items:center; gap:9px;")}>
+          <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>状態</span>
+          <div style={S("display:flex; gap:6px;")}>
+            <button style={v.statusBtns.all.style} onClick={v.statusBtns.all.onClick}>すべて</button>
+            <button style={v.statusBtns.open.style} onClick={v.statusBtns.open.onClick}>Open</button>
+            <button style={v.statusBtns.closed.style} onClick={v.statusBtns.closed.onClick}>Closed</button>
+          </div>
         </div>
-      </div>
+      )}
       {showSort && (
         <div style={S("display:flex; align-items:center; gap:9px;")}>
           <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>並べ替え</span>
@@ -54,7 +61,7 @@ export default function FilterControls({
         onClear={v.clearMilestoneBtn.onClick}
       />
       <div style={S("margin-left:auto; font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>
-        該当 {v.filterSummary}
+        {summary ?? `該当 ${v.filterSummary}`}
       </div>
     </div>
   );

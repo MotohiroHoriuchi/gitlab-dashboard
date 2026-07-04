@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   assignLanes,
   buildCalendar,
+  buildMilestoneCalendar,
   buildRelationIndex,
   calBarKey,
   chipSelectionRole,
@@ -12,6 +13,8 @@ import {
   dowOf,
   issueFilterLabels,
   issueInterval,
+  milestoneHealth,
+  reconstructBurndown,
   relBadgeText,
   renderVals,
   sanitizeHiddenDows,
@@ -812,5 +815,119 @@ describe("label filtering spans all labels (display stays on the first)", () => 
     const v = renderVals(twoLabelIssues(), stateWithLabels(["B"]), noop, meta);
     expect(v.rows.length).toBe(1); // only #1 carries B
     expect(v.filterSummary.startsWith("1 件")).toBe(true);
+  });
+});
+
+describe("reconstructBurndown", () => {
+  const D = (iso: string) => dayIndex(iso);
+  it("endpoints: ideal starts at scope, ends at 0; scope creep raises total mid-domain", () => {
+    const issues = [
+      mkIssue({ id: 1, isOpen: false, createdAt: "2026-06-20", closedAt: "2026-06-25" }),
+      mkIssue({ id: 2, isOpen: true, createdAt: "2026-06-20" }),
+      mkIssue({ id: 3, isOpen: true, createdAt: "2026-06-27" }), // created AFTER the start = scope creep
+    ];
+    const bd = reconstructBurndown(issues, D("2026-06-20"), D("2026-06-30"));
+    expect(bd.length).toBe(11); // inclusive daily samples
+    expect(bd[0].ideal).toBe(3); // ideal(start) = scope
+    expect(bd[bd.length - 1].ideal).toBe(0); // ideal(end) = 0
+    expect(bd[0].total).toBe(2); // #3 not yet in scope
+    expect(bd[0].remaining).toBe(2); // #1 closes on 25th (> 20th) so still open at start
+    const at27 = bd.find((p) => p.day === D("2026-06-27"))!;
+    expect(at27.total).toBe(3); // scope crept up to 3
+    expect(at27.remaining).toBe(2); // #1 closed, #2 & #3 open
+    expect(bd[bd.length - 1].remaining).toBe(2); // #2, #3 still open
+  });
+  it("counts a due-less open issue in remaining and guards a single-day domain", () => {
+    const issues = [mkIssue({ id: 1, isOpen: true, createdAt: "2026-06-20", dueDate: null })];
+    const bd = reconstructBurndown(issues, D("2026-06-25"), D("2026-06-25"));
+    expect(bd.length).toBe(1);
+    expect(bd[0].remaining).toBe(1);
+  });
+});
+
+describe("milestoneHealth", () => {
+  const openPastDue = mkIssue({ id: 1, isOpen: true, dueDate: "2026-06-20" }); // overdue vs TODAY
+  it("err when the milestone has an overdue open issue", () => {
+    expect(milestoneHealth([openPastDue], dayIndex("2026-07-20"), TODAY, 1, 5)).toBe("err");
+  });
+  it("err when the due date passed with work still remaining (no per-issue due)", () => {
+    const openNoDue = mkIssue({ id: 2, isOpen: true, dueDate: null });
+    expect(milestoneHealth([openNoDue], dayIndex("2026-06-25"), TODAY, 1, 0)).toBe("err");
+  });
+  it("warn when behind the ideal pace", () => {
+    const openNoDue = mkIssue({ id: 2, isOpen: true, dueDate: null });
+    expect(milestoneHealth([openNoDue], dayIndex("2026-07-20"), TODAY, 5, 2)).toBe("warn");
+  });
+  it("ok when on pace and nothing overdue", () => {
+    const closedOnTime = mkIssue({ id: 3, isOpen: false, dueDate: "2026-06-20", closedAt: "2026-06-19" });
+    expect(milestoneHealth([closedOnTime], dayIndex("2026-07-20"), TODAY, 0, 0)).toBe("ok");
+  });
+});
+
+describe("buildMilestoneCalendar", () => {
+  const ms: Milestone = { id: 1, title: "MS", startDate: "2026-06-20", dueDate: "2026-07-11", state: "active" };
+  const subset = () => [
+    // closed (dissolve into progress/burndown)
+    mkIssue({ id: 10, milestone: "MS", isOpen: false, createdAt: "2026-06-20", closedAt: "2026-06-25", dueDate: "2026-06-25" }),
+    mkIssue({ id: 11, milestone: "MS", isOpen: false, createdAt: "2026-06-20", closedAt: "2026-06-30", dueDate: "2026-06-30" }),
+    // open, overdue -> labeled tick + overdue bucket
+    mkIssue({ id: 12, milestone: "MS", isOpen: true, createdAt: "2026-06-22", dueDate: "2026-06-28" }),
+    // open, due soon (within ±14d, this week) -> labeled tick + thisWeek bucket
+    mkIssue({ id: 13, milestone: "MS", isOpen: true, createdAt: "2026-06-24", dueDate: "2026-07-04" }),
+    // open, far future, not checkpoint -> collapsed into +N + later bucket
+    mkIssue({ id: 14, milestone: "MS", isOpen: true, createdAt: "2026-06-24", dueDate: "2026-07-20" }),
+    // open, far future BUT checkpoint -> labeled tick + later bucket
+    mkIssue({ id: 15, milestone: "MS", isOpen: true, createdAt: "2026-06-24", dueDate: "2026-07-25", isCheckpoint: true }),
+    // open, no due date -> not ticked, later bucket, still counts in remaining
+    mkIssue({ id: 16, milestone: "MS", isOpen: true, createdAt: "2026-06-24", dueDate: null }),
+  ];
+
+  it("builds one row with progress KPIs over all statuses", () => {
+    const r = buildMilestoneCalendar(subset(), [ms], TODAY, "checkpoint");
+    expect(r.rows.length).toBe(1);
+    const row = r.rows[0];
+    expect(row.total).toBe(7);
+    expect(row.done).toBe(2);
+    expect(row.pct).toBe(29); // round(2/7)
+    expect(row.remaining).toBe(5);
+    expect(row.overdue).toBe(1); // #12 open & past due
+    expect(row.healthTone).toBe("err"); // has an overdue open issue
+    expect(row.bar).not.toBeNull();
+    expect(row.dueX).not.toBeNull();
+  });
+
+  it("labels overdue/checkpoint/near ticks individually and collapses the safe-future bulk", () => {
+    const row = buildMilestoneCalendar(subset(), [ms], TODAY, "checkpoint").rows[0];
+    const labeledIds = row.ticks.map((t) => t.id).sort((a, b) => a - b);
+    expect(labeledIds).toEqual([12, 13, 15]); // overdue, near, checkpoint
+    expect(row.moreChip).not.toBeNull();
+    expect(row.moreChip!.count).toBe(1); // only #14 (far, non-checkpoint)
+    expect(row.moreChip!.refs[0].id).toBe(14);
+  });
+
+  it("splits open issues into overdue / thisWeek / later (no-due lands in later)", () => {
+    const row = buildMilestoneCalendar(subset(), [ms], TODAY, "checkpoint").rows[0];
+    expect(row.buckets.overdue.map((r) => r.id)).toEqual([12]);
+    expect(row.buckets.thisWeek.map((r) => r.id)).toEqual([13]);
+    expect(row.buckets.later.map((r) => r.id)).toEqual([14, 15, 16]); // incl. the due-less #16
+    expect(row.buckets.later.find((r) => r.id === 16)!.dueLabel).toBe("期限なし");
+  });
+
+  it("exposes a reconstructable burndown and a month/today axis", () => {
+    const r = buildMilestoneCalendar(subset(), [ms], TODAY, "checkpoint");
+    expect(r.rows[0].spark.hasData).toBe(true);
+    expect(r.rows[0].burndown.hasData).toBe(true);
+    expect(r.gridLines.length).toBeGreaterThan(0);
+    expect(r.todayX).not.toBeNull();
+    expect(r.empty).toBe(false);
+  });
+
+  it("keeps a dateless, issue-less milestone as a KPI-only row (no bar)", () => {
+    const bare: Milestone = { id: 2, title: "空", startDate: null, dueDate: null, state: "active" };
+    const row = buildMilestoneCalendar([], [bare], TODAY, "checkpoint").rows[0];
+    expect(row.hasSchedule).toBe(false);
+    expect(row.bar).toBeNull();
+    expect(row.total).toBe(0);
+    expect(row.spark.hasData).toBe(false);
   });
 });

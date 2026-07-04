@@ -13,6 +13,7 @@ import {
 import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
+import RoadmapView from "@/components/RoadmapView";
 
 /** Full-height dark shell used for the loading / error states. */
 function Screen({ children }: { children: React.ReactNode }) {
@@ -169,6 +170,7 @@ export default function Dashboard() {
         <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
         <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
         <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
+        <button style={v.panelTabs.roadmap.style} onClick={v.panelTabs.roadmap.onClick}>ロードマップ</button>
       </div>
 
       {/* ── Main grid ── */}
@@ -378,6 +380,45 @@ export default function Dashboard() {
 
             <FilterControls v={v} st={st} showSort={false} />
             <CalendarView cal={v.calendar} />
+          </>
+        )}
+
+        {/* Roadmap tab: milestone-progress timeline. Progress needs open+closed,
+            so status filtering is hidden and counts run over all statuses. */}
+        {v.showRoadmap && (
+          <>
+            <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;")}>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>納期遵守率</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(16 185 129);")}>{v.roadmap.summary.adherenceRate ?? "—"}</span>
+                  {v.roadmap.summary.adherenceRate !== null && <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>%</span>}
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>期限内 {v.roadmap.summary.onTime} ／ 完了&期限あり {v.roadmap.summary.closedWithDue} 件</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(16 185 129 / .45);")}></div>
+              </div>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>遅延完了</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{v.roadmap.summary.late}</span>
+                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.roadmap.summary.avgLateDays !== null ? `平均 +${v.roadmap.summary.avgLateDays} 日遅れ` : "遅延なし"}</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+              </div>
+              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
+                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>期限超過（進行中）</div>
+                <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
+                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{v.roadmap.summary.overdue}</span>
+                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                </div>
+                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>予定日を過ぎた未完了</div>
+                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+              </div>
+            </div>
+
+            <FilterControls v={v} st={st} showSort={false} showStatus={false} summary={v.roadmap.filterSummary} />
+            <RoadmapView roadmap={v.roadmap} />
           </>
         )}
       </div>
