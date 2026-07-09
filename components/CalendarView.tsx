@@ -121,7 +121,7 @@ export default function CalendarView({
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    `padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.muted)};`,
+    `padding:2px 6px 5px; font-size:12.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.muted)};`,
   );
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
@@ -192,7 +192,7 @@ export default function CalendarView({
       {/* ── legend ── */}
       <div
         style={S(
-          `display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:${rgb(T.body)};`,
+          `display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:12.5px; color:${rgb(T.body)};`,
         )}
       >
         <Swatch style={{ background: rgba(MILESTONE_COLOR, 0.12), border: "1px solid " + rgba(MILESTONE_COLOR, 0.45) }} text="マイルストーン" />
@@ -222,7 +222,7 @@ export default function CalendarView({
             background: "transparent",
             cursor: "pointer",
             color: rgb(T.body),
-            fontSize: "11.5px",
+            fontSize: "12.5px",
             fontFamily: SANS,
           }}
         >
@@ -233,7 +233,7 @@ export default function CalendarView({
         </button>
         {/* non-working-day toggles: click a weekday chip to hide/show its column */}
         <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
-          <span style={S(`font-size:11.5px; color:${rgb(T.muted)};`)}>表示曜日</span>
+          <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>表示曜日</span>
           {cal.dowToggles.map((t) => (
             <button
               type="button"
@@ -391,7 +391,7 @@ function DayPopover({
     left,
     top,
     zIndex: 70,
-    width: "330px",
+    width: "360px",
     maxHeight: "400px",
     overflowY: "auto",
     background: rgb(T.canvasSoft),
@@ -404,7 +404,7 @@ function DayPopover({
   return (
     <div ref={innerRef} style={box}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={{ fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink) }}>{day.dayLabel}</span>
+        <span style={{ fontSize: "15px", fontWeight: 700, color: rgb(T.ink) }}>{day.dayLabel}</span>
         <button
           type="button"
           onClick={onClose}
@@ -456,7 +456,7 @@ function DayPopover({
                   <span
                     style={{
                       minWidth: 0,
-                      fontSize: "12.5px",
+                      fontSize: "13.5px",
                       fontWeight: 600,
                       color: rgb(T.body),
                       overflow: "hidden",
@@ -468,7 +468,7 @@ function DayPopover({
                   </span>
                   {it.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), fontSize: "12px" }}>★</span>}
                 </div>
-                <div style={{ marginTop: "2px", fontSize: "11.5px", color: rgb(T.muted) }}>
+                <div style={{ marginTop: "2px", fontSize: "12.5px", color: rgb(T.muted) }}>
                   <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
                   {metaRest(it) && <span> · {metaRest(it)}</span>}
                   {it.varianceLabel && (
@@ -479,7 +479,7 @@ function DayPopover({
                   )}
                 </div>
                 {it.relLine && (
-                  <div style={{ marginTop: "1px", fontSize: "10.5px", color: rgb(T.muted) }}>
+                  <div style={{ marginTop: "1px", fontSize: "11px", color: rgb(T.muted) }}>
                     {it.relLine}
                   </div>
                 )}

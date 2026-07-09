@@ -51,14 +51,16 @@ export const MONO =
 
 /* Type scale (px) for the calendar/roadmap views. Every font-size in those
  * views sits on one of these four steps — px literals inside S("…") strings
- * must use the same values. Contrast rules on the dark canvas: at TS_SM and
- * below never use T.mutedSoft (minimum: T.muted + weight 500); primary
- * content (bar labels, "+N" chips, tick ids) uses T.body or brighter;
- * T.mutedSoft is reserved for 13px+ asides and decoration. */
-export const TS_XS = 10.5; // badges, tick ids, auxiliary chips (hard floor)
-export const TS_SM = 11.5; // bar labels, meta lines, legends, small headings
-export const TS_MD = 12.5; // popover body, day numbers, values
-export const TS_LG = 13.5; // tooltip / popover row titles
+ * must use the same values. Contrast rules on the light canvas: at TS_SM and
+ * below never use T.mutedSoft (minimum: T.muted + weight 500); lane-primary
+ * content (bar labels, "+N" chips, tick ids) uses T.ink; T.mutedSoft is
+ * reserved for TS_MD+ asides and decoration. Overlays (tooltip/popovers) and
+ * chrome (legends, headers) sit a step above lane-bound text — they cost no
+ * lane density, so they get the readability budget first. */
+export const TS_XS = 11; // badges, tick ids, auxiliary chips (hard floor)
+export const TS_SM = 12.5; // bar labels, meta lines, legends, small headings
+export const TS_MD = 13.5; // popover body, day numbers, values
+export const TS_LG = 15; // tooltip / popover / KPI row titles
 
 export const rgb = (t: string) => `rgb(${t})`;
 export const rgba = (t: string, a: number) => `rgb(${t} / ${a})`;
@@ -94,7 +96,7 @@ export const seg = (active: boolean): CSSProperties => ({
   padding: "7px 13px",
   borderRadius: "8px",
   cursor: "pointer",
-  fontSize: "12.5px",
+  fontSize: "13px",
   fontWeight: 600,
   fontFamily: SANS,
   letterSpacing: ".01em",
@@ -534,7 +536,7 @@ export function renderVals(
       left: (v / rt.niceMax) * 100 + "%",
       transform: "translateX(-50%)",
       top: 0,
-      fontSize: "10px",
+      fontSize: "11px",
       color: rgb(T.mutedSoft),
       fontFamily: MONO,
     },
@@ -715,7 +717,7 @@ export function renderVals(
       left: (v / boxMax) * 100 + "%",
       transform: "translateX(-50%)",
       top: 0,
-      fontSize: "10px",
+      fontSize: "11px",
       color: rgb(T.mutedSoft),
       fontFamily: MONO,
     },
@@ -994,7 +996,7 @@ export const CHECKPOINT_STAR = "217 119 6"; // #d97706 amber ★ for checkpoint 
  *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
 const MAX_LANES = 3;
 /** Calendar bar/lane geometry (px) — sized so a TS_SM label fits in the bar. */
-const BAR_H = 20;
+const BAR_H = 22;
 const LANE_H = BAR_H + 3; // grid row height; rowGap adds the rest of the pitch
 const DUETICK_H = BAR_H + 2; // the plan tick pokes past the bar edges
 const JP_WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];

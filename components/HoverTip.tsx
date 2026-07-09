@@ -27,8 +27,8 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
     top,
     zIndex: 60,
     pointerEvents: "none",
-    minWidth: "180px",
-    maxWidth: "280px",
+    minWidth: "200px",
+    maxWidth: "320px",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
     borderRadius: "8px",
@@ -44,7 +44,7 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
           style={{
             flex: "1 1 auto",
             minWidth: 0,
-            fontSize: "13.5px",
+            fontSize: "15px",
             fontWeight: 700,
             color: rgb(T.ink),
             overflow: "hidden",
@@ -62,7 +62,7 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
             marginBottom: "6px",
             padding: "2px 8px",
             borderRadius: "999px",
-            fontSize: "10.5px",
+            fontSize: "11px",
             fontWeight: 600,
             fontFamily: MONO,
             background: rgba(tip.color, 0.15),
@@ -76,8 +76,8 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px" }}>
         {tip.rows.map((r, i) => (
           <div key={i} style={{ display: "contents" }}>
-            <span style={{ fontSize: "11.5px", color: rgb(T.muted) }}>{r.k}</span>
-            <span style={{ fontSize: "12.5px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
+            <span style={{ fontSize: "12.5px", color: rgb(T.muted) }}>{r.k}</span>
+            <span style={{ fontSize: "13.5px", fontWeight: r.tone ? 600 : 400, color: rgb(toneColor(r.tone ?? "neutral")) }}>
               {r.v}
             </span>
           </div>

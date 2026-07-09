@@ -367,7 +367,7 @@ export default function Dashboard() {
               <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(66px,1fr)); gap:9px;")}>
                 {v.hoveredDetail.cells.map((cell, i) => (
                   <div key={i}>
-                    <div style={S(`font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:${rgb(T.mutedSoft)}; font-weight:600;`)}>{cell.k}</div>
+                    <div style={S(`font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:${rgb(T.mutedSoft)}; font-weight:600;`)}>{cell.k}</div>
                     <div style={cell.vStyle}>{cell.v}</div>
                   </div>
                 ))}
