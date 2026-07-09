@@ -15,22 +15,35 @@ export const DEFAULT_GROUP_BY: DashState["groupBy"] = "label";
 /* ------------------------------------------------------------------ *
  *  Theme tokens + font stacks. Fonts resolve to the next/font CSS
  *  variables declared in app/layout.tsx (self-hosted, no CDN).
+ *  Light "warm paper" theme per DESIGN.md (Notion-derived): page sits on
+ *  canvas, surfaces are white and separated by hairline + barely-there
+ *  shadows (SH_1/SH_2), and primary is the single structural accent.
+ *  canvasSoft === card is deliberate — Notion differentiates surfaces by
+ *  border/shadow, not fill.
  * ------------------------------------------------------------------ */
 export const T = {
-  canvas: "16 16 16",
-  canvasSoft: "22 22 22",
-  card: "26 26 26",
-  strong: "36 36 36",
-  ink: "242 242 242",
-  body: "189 189 189",
-  muted: "139 148 158",
-  mutedSoft: "110 118 129",
-  primary: "0 217 146",
-  hairline: "61 58 57",
-  warn: "210 153 34",
-  err: "248 81 73",
-  ok: "16 185 129",
+  canvas: "246 245 244", // #f6f5f4 warm paper
+  canvasSoft: "255 255 255",
+  card: "255 255 255",
+  strong: "239 238 236", // chip/badge fill
+  ink: "28 27 26", // #1c1b1a near-black
+  body: "49 48 46", // #31302e
+  muted: "97 93 89", // #615d59
+  mutedSoft: "163 158 152", // #a39e98 — TS_MD+ asides only
+  primary: "0 117 222", // #0075de Notion Blue
+  onPrimary: "255 255 255", // text/glyphs on primary fills
+  hairline: "230 230 230", // #e6e6e6
+  warn: "180 83 9", // #b45309
+  err: "209 36 47", // #d1242f
+  ok: "26 127 55", // #1a7f37
 } as const;
+
+/* Barely-there layered shadows (DESIGN.md Elevation). SH_1: raised cards /
+ * floating buttons. SH_2: modals, popovers, tooltips. */
+export const SH_1 =
+  "0 0.2px 1px rgba(0,0,0,.01), 0 0.8px 2.9px rgba(0,0,0,.02), 0 2px 7.8px rgba(0,0,0,.027), 0 4px 18px rgba(0,0,0,.04)";
+export const SH_2 =
+  "0 1px 2px rgba(0,0,0,.02), 0 3px 8px rgba(0,0,0,.03), 0 8px 20px rgba(0,0,0,.04), 0 14px 36px rgba(0,0,0,.05), 0 23px 52px rgba(0,0,0,.05)";
 
 export const SANS = "var(--font-inter), system-ui, -apple-system, sans-serif";
 export const MONO =
@@ -86,8 +99,8 @@ export const seg = (active: boolean): CSSProperties => ({
   fontFamily: SANS,
   letterSpacing: ".01em",
   transition: "all .15s",
-  border: "1px solid " + (active ? rgba(T.primary, 0.5) : rgb(T.hairline)),
-  background: active ? rgba(T.primary, 0.14) : rgb(T.canvasSoft),
+  border: "1px solid " + (active ? rgba(T.primary, 0.45) : rgb(T.hairline)),
+  background: active ? rgba(T.primary, 0.12) : rgb(T.canvasSoft),
   color: active ? rgb(T.primary) : rgb(T.body),
 });
 
@@ -530,7 +543,7 @@ export function renderVals(
     height: "22px",
     display: "flex",
     alignItems: "center",
-    backgroundImage: "linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)",
+    backgroundImage: `linear-gradient(90deg, ${rgba(T.ink, 0.06)} 1px, transparent 1px)`,
     backgroundSize: rStepPct + "% 100%",
   };
 
@@ -611,15 +624,16 @@ export function renderVals(
   const gb = st.groupBy;
   const keyOf = (it: Issue) =>
     gb === "label" ? it.label.name : gb === "assignee" ? it.assignee : it.milestone;
+  // series colors darkened for the light canvas (fills stay translucent)
   const palette = [
-    "0 217 146",
-    "108 182 255",
-    "212 167 44",
-    "176 131 240",
-    "255 166 87",
-    "87 171 90",
-    "248 81 73",
-    "139 148 158",
+    "5 150 105",
+    "37 99 235",
+    "180 83 9",
+    "124 58 237",
+    "234 88 12",
+    "13 148 136",
+    "220 38 38",
+    "87 83 78",
   ];
   const map: Record<string, Issue[]> = {};
   data.forEach((it) => {
@@ -710,7 +724,7 @@ export function renderVals(
     position: "relative",
     height: "30px",
     borderRadius: "4px",
-    backgroundImage: "linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)",
+    backgroundImage: `linear-gradient(90deg, ${rgba(T.ink, 0.06)} 1px, transparent 1px)`,
     backgroundSize: bStepPct + "% 100%",
   };
 
@@ -751,7 +765,7 @@ export function renderVals(
       alignItems: "center",
       gap: "12px",
       padding: "7px 0",
-      borderBottom: "1px solid " + rgba(T.hairline, 0.5),
+      borderBottom: "1px solid " + rgb(T.hairline),
       cursor: "pointer",
       background: st.hovered === g.k ? rgba(g.col, 0.06) : "transparent",
       transition: "background .15s",
@@ -973,8 +987,8 @@ export function renderVals(
 /* ------------------------------------------------------------------ *
  *  buildCalendar — the timeline view model
  * ------------------------------------------------------------------ */
-export const MILESTONE_COLOR = "176 131 240"; // distinct purple accent for milestone bars
-export const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
+export const MILESTONE_COLOR = "124 58 237"; // #7c3aed deep violet for milestone bars
+export const CHECKPOINT_STAR = "217 119 6"; // #d97706 amber ★ for checkpoint deadlines
 /** Max issue lanes drawn per week before the surplus collapses into a per-day
  *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
 const MAX_LANES = 3;
@@ -1324,8 +1338,8 @@ export function selectionOverlay(role: CalRole, baseBoxShadow?: string): CSSProp
   if (role === "dim") return { transition: FOCUS_TRANSITION, opacity: 0.22 };
   const ring =
     role === "self"
-      ? `0 0 0 2px ${rgb(T.ink)}, 0 0 12px ${rgba(T.ink, 0.35)}`
-      : `0 0 0 1.5px ${rgba(T.ink, 0.55)}`;
+      ? `0 0 0 2px ${rgb(T.primary)}`
+      : `0 0 0 1.5px ${rgba(T.primary, 0.55)}`;
   return {
     transition: FOCUS_TRANSITION,
     boxShadow: baseBoxShadow ? `${ring}, ${baseBoxShadow}` : ring,
@@ -1353,7 +1367,7 @@ export function relBadgeText(role: CalRole): string | null {
 export const relBadgeStyle: CSSProperties = {
   flex: "0 0 auto",
   padding: "2px 5px",
-  borderRadius: "3px",
+  borderRadius: "4px",
   fontSize: TS_XS + "px",
   fontWeight: 700,
   lineHeight: 1,
@@ -1395,7 +1409,6 @@ function barStyle(
     lineHeight: 1,
     borderRadius: `${rL} ${rR} ${rR} ${rL}`,
     color: rgb(T.ink),
-    textShadow: "0 1px 2px rgb(0 0 0 / .55)",
     cursor: "pointer", // click-focus: highlight relations, dim the rest
   };
   if (it.track === "milestone") {
@@ -1414,12 +1427,12 @@ function barStyle(
     s.background = rgba(c, 0.9);
     s.border = "1px solid " + rgb(c);
   }
-  // Checkpoints are always drawn (never collapsed) and stand out with a gold
-  // ring + glow so deadlines are impossible to miss.
+  // Checkpoints are always drawn (never collapsed) and stand out with an
+  // amber ring so deadlines are impossible to miss. Must match the 0%/100%
+  // frames of gi-checkpoint-glow in globals.css (the burst settles onto it).
   if (it.track === "issue" && it.isCheckpoint) {
     s.border = "1px solid " + rgb(CHECKPOINT_STAR);
-    s.boxShadow =
-      "0 0 0 1px " + rgba(CHECKPOINT_STAR, 0.6) + ", 0 0 9px " + rgba(CHECKPOINT_STAR, 0.5);
+    s.boxShadow = "0 0 0 1px " + rgba(CHECKPOINT_STAR, 0.45);
   }
   return s;
 }
@@ -1690,7 +1703,6 @@ export function buildCalendar(
           fontSize: "14px",
           lineHeight: 1,
           color: rgb(CHECKPOINT_STAR),
-          textShadow: "0 0 6px " + rgba(CHECKPOINT_STAR, 0.9),
           // above the overrun hatch overlay (same grid cell, later sibling)
           position: "relative",
           zIndex: 1,

@@ -184,10 +184,10 @@ export default function Dashboard() {
       <div style={S("display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:22px;")}>
         <div>
           <div style={S("display:flex; align-items:center; gap:9px;")}>
-            <div style={S(`width:8px; height:8px; border-radius:50%; background:${rgb(T.primary)}; box-shadow:0 0 10px ${rgba(T.primary, .85)};`)}></div>
+            <div style={S(`width:8px; height:8px; border-radius:50%; background:${rgb(T.primary)}; box-shadow:0 0 0 3px ${rgba(T.primary, .15)};`)}></div>
             <span style={S(`font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>GitLab Issue Analytics</span>
           </div>
-          <h1 style={S(`margin:9px 0 5px; font-size:26px; font-weight:700; color:${rgb(T.ink)}; letter-spacing:-.01em;`)}>{v.project}</h1>
+          <h1 style={S(`margin:9px 0 5px; font-size:26px; font-weight:700; color:${rgb(T.ink)}; letter-spacing:-0.5px;`)}>{v.project}</h1>
           <div style={S(`font-size:12.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{v.repo} · {v.asOf} 時点 · 最終更新 {new Date(data.fetchedAt).toLocaleTimeString("ja-JP")}</div>
         </div>
         <div style={S("text-align:right;")}>
@@ -263,7 +263,7 @@ export default function Dashboard() {
             <FilterControls v={v} st={st} showSort />
 
             {/* Ranked list */}
-            <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`)}>
+            <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`)}>
               <div style={S("display:flex; align-items:baseline; justify-content:flex-end; gap:12px; margin-bottom:3px;")}>
                 <span style={S(`font-size:11.5px; color:${rgb(T.mutedSoft)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>上位 {v.topN} 件 · 単位 日</span>
               </div>
@@ -277,7 +277,7 @@ export default function Dashboard() {
                 90日超 · 斜線は Open（未解決）。
               </p>
 
-              <div style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
+              <div style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgb(T.hairline)};`)}>
                 <div></div>
                 <div style={S("position:relative; height:15px;")}>
                   {v.rankTicks.map((t, i) => (
@@ -287,7 +287,7 @@ export default function Dashboard() {
               </div>
 
               {v.rows.map((row, i) => (
-                <div key={i} style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
+                <div key={i} style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgb(T.hairline)};`)}>
                   <div style={S("min-width:0;")}>
                     <div style={S("display:flex; align-items:center; gap:7px;")}>
                       <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:${rgb(T.mutedSoft)}; width:20px; flex:0 0 auto;`)}>{row.rankLabel}</span>
@@ -315,7 +315,7 @@ export default function Dashboard() {
 
         {/* Distribution tab: box-plot over ALL issues (filter-independent) */}
         {v.showDist && (
-          <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`)}>
+          <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`)}>
             <div style={S("display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:3px;")}>
               <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>Close 日数の分布（箱ひげ）</h2>
               <div style={S("display:flex; gap:6px;")}>
@@ -326,7 +326,7 @@ export default function Dashboard() {
             </div>
             <p style={S(`margin:0 0 12px; font-size:12px; color:${rgb(T.muted)}; line-height:1.5;`)}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。Close済み3件未満は箱を描けないため各データ点＋中央値のみ表示。中央値が大きい順。行にホバーで詳細。全イシューが対象（フィルタ非依存）。</p>
 
-            <div style={S(`display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
+            <div style={S(`display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid ${rgb(T.hairline)};`)}>
               <div></div>
               <div style={S("position:relative; height:15px;")}>
                 {v.boxTicks.map((t, i) => (
@@ -358,7 +358,7 @@ export default function Dashboard() {
             ))}
 
             {/* Hover detail */}
-            <div style={S(`margin-top:14px; padding:12px 14px; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:10px;`)}>
+            <div style={S(`margin-top:14px; padding:12px 14px; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px;`)}>
               <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:11px;")}>
                 <span style={v.hoveredDetail.dotStyle}></span>
                 <span style={S(`font-size:13px; font-weight:700; color:${rgb(T.ink)};`)}>{v.hoveredDetail.name}</span>

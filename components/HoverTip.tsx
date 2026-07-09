@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useRef } from "react";
-import { MONO, SANS, T, rgb, rgba, toneColor, type CalTip } from "@/lib/logic";
+import { MONO, SANS, SH_2, T, rgb, rgba, toneColor, type CalTip } from "@/lib/logic";
 import { useViewportClamp } from "@/components/useViewportClamp";
 
 /** Square color swatch — shared by the tooltip title row and the calendar's
@@ -32,7 +32,7 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
     borderRadius: "8px",
-    boxShadow: "0 10px 30px rgba(0,0,0,.55)",
+    boxShadow: SH_2,
     padding: "9px 11px",
     fontFamily: SANS,
   };

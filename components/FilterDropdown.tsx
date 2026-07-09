@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MONO, SANS, T, rgb, rgba, type FilterOption } from "@/lib/logic";
+import { MONO, SANS, SH_2, T, rgb, rgba, type FilterOption } from "@/lib/logic";
 
 /** Compact, searchable multi-select filter. Scales to many labels/assignees
  *  without widening the filter bar (the trigger stays one button). */
@@ -77,7 +77,7 @@ export default function FilterDropdown({
     padding: "0 4px",
     borderRadius: "8px",
     background: rgb(T.primary),
-    color: rgb(T.canvas),
+    color: rgb(T.onPrimary),
     fontSize: "10px",
     fontWeight: 700,
     fontFamily: MONO,
@@ -90,8 +90,8 @@ export default function FilterDropdown({
     width: "268px",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
-    borderRadius: "10px",
-    boxShadow: "0 10px 30px rgba(0,0,0,.55)",
+    borderRadius: "12px",
+    boxShadow: SH_2,
     padding: "8px",
     boxSizing: "border-box",
   };
@@ -116,9 +116,9 @@ export default function FilterDropdown({
               boxSizing: "border-box",
               padding: "6px 8px",
               marginBottom: "6px",
-              borderRadius: "6px",
+              borderRadius: "4px",
               border: "1px solid " + rgb(T.hairline),
-              background: rgb(T.canvas),
+              background: rgb(T.card),
               color: rgb(T.ink),
               fontSize: "12px",
               fontFamily: SANS,
@@ -164,7 +164,7 @@ export default function FilterDropdown({
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: rgb(T.canvas),
+                    color: rgb(T.onPrimary),
                     fontSize: "10px",
                     fontWeight: 800,
                   }}

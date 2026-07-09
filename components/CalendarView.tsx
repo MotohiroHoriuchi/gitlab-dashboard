@@ -5,6 +5,7 @@ import {
   CHECKPOINT_STAR,
   MILESTONE_COLOR,
   SANS,
+  SH_2,
   S,
   T,
   calBarKey,
@@ -143,7 +144,7 @@ export default function CalendarView({
   return (
     <section
       style={S(
-        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`,
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`,
       )}
     >
       {/* ── header: title + mode toggle + nav ── */}
@@ -392,8 +393,8 @@ function DayPopover({
     overflowY: "auto",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
-    borderRadius: "10px",
-    boxShadow: "0 14px 36px rgba(0,0,0,.6)",
+    borderRadius: "12px",
+    boxShadow: SH_2,
     padding: "10px 12px 12px",
     fontFamily: SANS,
   };

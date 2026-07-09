@@ -6,6 +6,7 @@ import {
   MILESTONE_COLOR,
   MONO,
   SANS,
+  SH_2,
   S,
   T,
   rgb,
@@ -82,7 +83,7 @@ export default function RoadmapView({
   return (
     <section
       style={S(
-        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`,
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`,
       )}
     >
       {/* header */}
@@ -134,7 +135,7 @@ export default function RoadmapView({
                 gap: "0 14px",
                 alignItems: "center",
                 padding: "10px 0",
-                borderBottom: "1px solid " + rgba(T.hairline, 0.5),
+                borderBottom: "1px solid " + rgb(T.hairline),
                 cursor: "pointer",
                 background: expanded === row.key ? rgba(MILESTONE_COLOR, 0.06) : "transparent",
                 transition: "background .15s",
@@ -179,7 +180,7 @@ function KpiColumn({
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-        <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto", boxShadow: "0 0 6px " + rgba(tone, 0.6) }} />
+        <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto" }} />
         <span
           style={{ minWidth: 0, fontSize: "13.5px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           onMouseEnter={(e) => onTip(e, row.tip)}
@@ -236,12 +237,12 @@ function Track({
     height: "56px",
     borderRadius: "6px",
     overflow: "hidden", // clamp any child that rounds past the edge
-    backgroundImage: `repeating-linear-gradient(90deg, ${rgba(T.hairline, 0.35)} 0 1px, transparent 1px ${weekStepPct}%)`,
+    backgroundImage: `repeating-linear-gradient(90deg, ${rgba(T.ink, 0.05)} 0 1px, transparent 1px ${weekStepPct}%)`,
   };
   return (
     <div style={trackStyle}>
       {gridLines.map((g, i) => (
-        <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.x + "%", width: "1px", background: rgba(T.hairline, 0.6) }} />
+        <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.x + "%", width: "1px", background: rgba(T.ink, 0.12) }} />
       ))}
       {todayX !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX + "%", width: "2px", background: rgba(T.primary, 0.9), zIndex: 2 }} />}
 
@@ -314,7 +315,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
   const b = row.burndown;
   const tone = toneColor(row.healthTone);
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", padding: "14px 4px 18px", borderBottom: "1px solid " + rgba(T.hairline, 0.5) }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", padding: "14px 4px 18px", borderBottom: "1px solid " + rgb(T.hairline) }}>
       <div style={{ flex: "1 1 380px", minWidth: 0 }}>
         <div style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
           バーンダウン
@@ -326,7 +327,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
           <svg width="100%" viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxWidth: "100%", display: "block" }}>
             {b.yLabels.map((yl, i) => (
               <g key={i}>
-                <line x1="34" y1={yl.y} x2={CHART_W - 12} y2={yl.y} stroke={rgba(T.hairline, 0.5)} strokeWidth="1" />
+                <line x1="34" y1={yl.y} x2={CHART_W - 12} y2={yl.y} stroke={rgb(T.hairline)} strokeWidth="1" />
                 <text x="30" y={yl.y + 4} textAnchor="end" fontSize="12" fill={rgb(T.muted)} fontFamily={MONO}>{yl.label}</text>
               </g>
             ))}
@@ -391,8 +392,8 @@ function ChipPopover({ chip, innerRef, onClose }: { chip: NonNullable<ChipState>
         overflowY: "auto",
         background: rgb(T.canvasSoft),
         border: "1px solid " + rgb(T.hairline),
-        borderRadius: "10px",
-        boxShadow: "0 14px 36px rgba(0,0,0,.6)",
+        borderRadius: "12px",
+        boxShadow: SH_2,
         padding: "10px 12px",
         fontFamily: SANS,
       }}
