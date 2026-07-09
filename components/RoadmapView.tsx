@@ -2,6 +2,8 @@
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import {
+  CHECKPOINT_STAR,
+  MILESTONE_COLOR,
   MONO,
   SANS,
   S,
@@ -17,9 +19,6 @@ import {
 } from "@/lib/logic";
 import { useViewportClamp } from "@/components/useViewportClamp";
 import HoverTip from "@/components/HoverTip";
-
-const MS_COLOR = "176 131 240"; // milestone purple (mirrors buildCalendar)
-const CHECKPOINT_STAR = "255 199 74";
 // viewBox dims — must match SPARK_*/CHART_* in lib/logic.ts
 const SPARK_W = 120,
   SPARK_H = 32;
@@ -83,14 +82,14 @@ export default function RoadmapView({
   return (
     <section
       style={S(
-        "background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;",
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`,
       )}
     >
       {/* header */}
       <div style={S("display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px;")}>
-        <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>マイルストーンの進み具合</h2>
+        <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>マイルストーンの進み具合</h2>
         <div style={S("display:flex; align-items:center; gap:10px;")}>
-          <span style={S("font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{roadmap.spanLabel}</span>
+          <span style={S(`font-size:11.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{roadmap.spanLabel}</span>
           {onToggleFull && (
             <button
               style={seg(!!fullscreen)}
@@ -103,10 +102,10 @@ export default function RoadmapView({
           )}
         </div>
       </div>
-      <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>
-        バーは start→due（縦線が本日、濃い部分が経過）。tick は<b style={{ color: "rgb(242 242 242)" }}>未完</b>イシューの締切（
-        <span style={{ color: "rgb(248 81 73)" }}>■</span>超過 ·
-        <span style={{ color: "rgb(255 199 74)" }}> ★</span>チェックポイント）。左のスパークは残数（実線）と理想線（破線）。行クリックで詳細。
+      <p style={S(`margin:0 0 12px; font-size:12px; color:${rgb(T.muted)}; line-height:1.5;`)}>
+        バーは start→due（縦線が本日、濃い部分が経過）。tick は<b style={{ color: rgb(T.ink) }}>未完</b>イシューの締切（
+        <span style={{ color: rgb(T.err) }}>■</span>超過 ·
+        <span style={{ color: rgb(CHECKPOINT_STAR) }}> ★</span>チェックポイント）。左のスパークは残数（実線）と理想線（破線）。行クリックで詳細。
       </p>
 
       {/* month header aligned to the track column */}
@@ -121,7 +120,7 @@ export default function RoadmapView({
       </div>
 
       {roadmap.empty ? (
-        <div style={S("padding:32px 0; text-align:center; font-size:13px; color:rgb(110 118 129);")}>
+        <div style={S(`padding:32px 0; text-align:center; font-size:13px; color:${rgb(T.mutedSoft)};`)}>
           表示できるマイルストーンがありません。マイルストーンに開始日／期限を設定してください。
         </div>
       ) : (
@@ -137,7 +136,7 @@ export default function RoadmapView({
                 padding: "10px 0",
                 borderBottom: "1px solid " + rgba(T.hairline, 0.5),
                 cursor: "pointer",
-                background: expanded === row.key ? rgba(MS_COLOR, 0.06) : "transparent",
+                background: expanded === row.key ? rgba(MILESTONE_COLOR, 0.06) : "transparent",
                 transition: "background .15s",
               }}
             >
@@ -255,8 +254,8 @@ function Track({
             left: row.bar.left + "%",
             width: row.bar.width + "%",
             borderRadius: "5px",
-            border: "1px solid " + rgba(MS_COLOR, 0.6),
-            background: `linear-gradient(90deg, ${rgba(MS_COLOR, 0.5)} 0 ${row.bar.elapsedPct}%, ${rgba(MS_COLOR, 0.14)} ${row.bar.elapsedPct}% 100%)`,
+            border: "1px solid " + rgba(MILESTONE_COLOR, 0.6),
+            background: `linear-gradient(90deg, ${rgba(MILESTONE_COLOR, 0.5)} 0 ${row.bar.elapsedPct}%, ${rgba(MILESTONE_COLOR, 0.14)} ${row.bar.elapsedPct}% 100%)`,
           }}
           onMouseEnter={(e) => onTip(e, row.tip)}
           onMouseMove={(e) => onTip(e, row.tip)}
@@ -320,7 +319,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
         <div style={{ fontSize: "12.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
           バーンダウン
           <span style={{ marginLeft: "10px", fontWeight: 400, color: rgb(T.muted), fontSize: "11.5px" }}>
-            <span style={{ color: rgb(tone) }}>実線</span>=残数 · <span style={{ color: rgb(T.muted) }}>破線</span>=理想 · <span style={{ color: rgba(MS_COLOR, 0.9) }}>薄線</span>=総スコープ
+            <span style={{ color: rgb(tone) }}>実線</span>=残数 · <span style={{ color: rgb(T.muted) }}>破線</span>=理想 · <span style={{ color: rgba(MILESTONE_COLOR, 0.9) }}>薄線</span>=総スコープ
           </span>
         </div>
         {b.hasData ? (
@@ -334,12 +333,12 @@ function Expanded({ row }: { row: RoadmapRow }) {
             {b.xLabels.map((xl, i) => (
               <text key={i} x={xl.x} y={CHART_H - 6} textAnchor={i === 0 ? "start" : i === b.xLabels.length - 1 ? "end" : "middle"} fontSize="12" fill={rgb(T.muted)} fontFamily={MONO}>{xl.label}</text>
             ))}
-            <polyline points={b.scopePoints} fill="none" stroke={rgba(MS_COLOR, 0.7)} strokeWidth="1.5" />
+            <polyline points={b.scopePoints} fill="none" stroke={rgba(MILESTONE_COLOR, 0.7)} strokeWidth="1.5" />
             <polyline points={b.idealPoints} fill="none" stroke={rgba(T.mutedSoft, 0.8)} strokeWidth="1.5" strokeDasharray="5 3" />
             <polyline points={b.actualPoints} fill="none" stroke={rgb(tone)} strokeWidth="2.5" />
           </svg>
         ) : (
-          <div style={S("padding:20px 0; font-size:12px; color:rgb(139 148 158);")}>このマイルストーンにはイシューがありません。</div>
+          <div style={S(`padding:20px 0; font-size:12px; color:${rgb(T.muted)};`)}>このマイルストーンにはイシューがありません。</div>
         )}
       </div>
 
@@ -348,7 +347,7 @@ function Expanded({ row }: { row: RoadmapRow }) {
         <Bucket title="超過" tone="err" refs={row.buckets.overdue} />
         <Bucket title="今週（〜7日）" tone="warn" refs={row.buckets.thisWeek} />
         <Bucket title="それ以降・期限なし" tone="neutral" refs={row.buckets.later} />
-        {row.remaining === 0 && <div style={S("font-size:12px; color:rgb(16 185 129);")}>未完はありません 🎉</div>}
+        {row.remaining === 0 && <div style={S(`font-size:12px; color:${rgb(T.ok)};`)}>未完はありません 🎉</div>}
       </div>
     </div>
   );

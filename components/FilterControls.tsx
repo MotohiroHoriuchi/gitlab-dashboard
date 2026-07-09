@@ -1,6 +1,6 @@
 "use client";
 
-import { S, type Vals } from "@/lib/logic";
+import { S, T, rgb, type Vals } from "@/lib/logic";
 import type { DashState } from "@/lib/types";
 import FilterDropdown from "@/components/FilterDropdown";
 
@@ -21,10 +21,10 @@ export default function FilterControls({
   summary?: string;
 }) {
   return (
-    <div style={S("display:flex; flex-wrap:wrap; align-items:center; gap:14px 20px; padding:13px 16px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:12px;")}>
+    <div style={S(`display:flex; flex-wrap:wrap; align-items:center; gap:14px 20px; padding:13px 16px; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px;`)}>
       {showStatus && (
         <div style={S("display:flex; align-items:center; gap:9px;")}>
-          <span style={S("font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:rgb(139 148 158); font-weight:600;")}>状態</span>
+          <span style={S(`font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.muted)}; font-weight:600;`)}>状態</span>
           <div style={S("display:flex; gap:6px;")}>
             <button style={v.statusBtns.all.style} onClick={v.statusBtns.all.onClick}>すべて</button>
             <button style={v.statusBtns.open.style} onClick={v.statusBtns.open.onClick}>Open</button>
@@ -34,7 +34,7 @@ export default function FilterControls({
       )}
       {showSort && (
         <div style={S("display:flex; align-items:center; gap:9px;")}>
-          <span style={S("font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:rgb(139 148 158); font-weight:600;")}>並べ替え</span>
+          <span style={S(`font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.muted)}; font-weight:600;`)}>並べ替え</span>
           <div style={S("display:flex; gap:6px;")}>
             <button style={v.sortBtns.linger.style} onClick={v.sortBtns.linger.onClick}>長引き順</button>
             <button style={v.sortBtns.recent.style} onClick={v.sortBtns.recent.onClick}>新しい順</button>
@@ -60,7 +60,7 @@ export default function FilterControls({
         selectedCount={st.milestones.length}
         onClear={v.clearMilestoneBtn.onClick}
       />
-      <div style={S("margin-left:auto; font-size:11.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>
+      <div style={S(`margin-left:auto; font-size:11.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>
         {summary ?? `該当 ${v.filterSummary}`}
       </div>
     </div>

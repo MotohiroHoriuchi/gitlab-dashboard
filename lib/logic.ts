@@ -973,8 +973,8 @@ export function renderVals(
 /* ------------------------------------------------------------------ *
  *  buildCalendar — the timeline view model
  * ------------------------------------------------------------------ */
-const MILESTONE_COLOR = "176 131 240"; // distinct purple accent for milestone bars
-const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
+export const MILESTONE_COLOR = "176 131 240"; // distinct purple accent for milestone bars
+export const CHECKPOINT_STAR = "255 199 74"; // gold ★ for checkpoint deadlines
 /** Max issue lanes drawn per week before the surplus collapses into a per-day
  *  "+N 件" overflow chip. Milestones are exempt (few, always shown up top). */
 const MAX_LANES = 3;

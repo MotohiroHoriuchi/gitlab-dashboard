@@ -2,6 +2,8 @@
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import {
+  CHECKPOINT_STAR,
+  MILESTONE_COLOR,
   SANS,
   S,
   T,
@@ -118,14 +120,14 @@ export default function CalendarView({
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    "padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:rgb(189 189 189);",
+    `padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.body)};`,
   );
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
   const sparkleAnim: CSSProperties = sparkle ? { animation: "gi-sparkle 3s ease-in-out" } : {};
   const cpGlow: CSSProperties = sparkle ? { animation: "gi-checkpoint-glow 3s ease-in-out" } : {};
   const dimAnim: CSSProperties = sparkle ? { animation: "gi-dim 3s ease-in-out" } : {};
-  const starWrap: CSSProperties = { color: rgb("255 199 74"), fontSize: "13px", ...sparkleAnim };
+  const starWrap: CSSProperties = { color: rgb(CHECKPOINT_STAR), fontSize: "13px", ...sparkleAnim };
   const segKey = (k: string) => (sparkle ? `${k}-${sparkle}` : k);
 
   // Raw cursor-offset coordinates only — viewport clamping happens inside the
@@ -141,7 +143,7 @@ export default function CalendarView({
   return (
     <section
       style={S(
-        "background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;",
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`,
       )}
     >
       {/* ── header: title + mode toggle + nav ── */}
@@ -150,7 +152,7 @@ export default function CalendarView({
           "display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;",
         )}
       >
-        <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>
+        <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>
           {cal.title}
         </h2>
         <div style={S("display:flex; align-items:center; gap:10px; flex-wrap:wrap;")}>
@@ -189,10 +191,10 @@ export default function CalendarView({
       {/* ── legend ── */}
       <div
         style={S(
-          "display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:rgb(189 189 189);",
+          `display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:${rgb(T.body)};`,
         )}
       >
-        <Swatch style={{ background: rgba("176 131 240", 0.2), border: "1px solid " + rgba("176 131 240", 0.6) }} text="マイルストーン" />
+        <Swatch style={{ background: rgba(MILESTONE_COLOR, 0.2), border: "1px solid " + rgba(MILESTONE_COLOR, 0.6) }} text="マイルストーン" />
         <Swatch
           style={{
             background:
@@ -230,7 +232,7 @@ export default function CalendarView({
         </button>
         {/* non-working-day toggles: click a weekday chip to hide/show its column */}
         <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
-          <span style={S("font-size:11.5px; color:rgb(139 148 158);")}>表示曜日</span>
+          <span style={S(`font-size:11.5px; color:${rgb(T.muted)};`)}>表示曜日</span>
           {cal.dowToggles.map((t) => (
             <button
               type="button"
@@ -340,7 +342,7 @@ export default function CalendarView({
       ))}
 
       {cal.empty && (
-        <div style={S("padding:32px 0; text-align:center; font-size:13px; color:rgb(110 118 129);")}>
+        <div style={S(`padding:32px 0; text-align:center; font-size:13px; color:${rgb(T.mutedSoft)};`)}>
           この期間に表示できる予定がありません。マイルストーン／期限を設定するか、期間を移動してください。
         </div>
       )}
@@ -460,7 +462,7 @@ function DayPopover({
                   >
                     {it.track === "issue" ? `#${it.id} ${it.title}` : it.title}
                   </span>
-                  {it.isCheckpoint && <span style={{ color: rgb("255 199 74"), fontSize: "12px" }}>★</span>}
+                  {it.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR), fontSize: "12px" }}>★</span>}
                 </div>
                 <div style={{ marginTop: "2px", fontSize: "11.5px", color: rgb(T.muted) }}>
                   <span style={{ color: rgb(statusColor(it.status)), fontWeight: 600 }}>{it.statusLabel}</span>
@@ -487,7 +489,7 @@ function DayPopover({
 }
 
 function statusColor(status: CalDayItem["status"]): string {
-  return status === "open" ? T.primary : status === "closed" ? T.muted : "176 131 240";
+  return status === "open" ? T.primary : status === "closed" ? T.muted : MILESTONE_COLOR;
 }
 
 /** "担当者 · 期間 · ラベル" — the non-status part of an item's meta line. */

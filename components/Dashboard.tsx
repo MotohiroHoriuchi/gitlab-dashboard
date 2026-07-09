@@ -6,7 +6,10 @@ import {
   DEFAULT_GROUP_BY,
   DEFAULT_HIDDEN_DOWS,
   S,
+  T,
   renderVals,
+  rgb,
+  rgba,
   sanitizeHiddenDows,
   type Patch,
 } from "@/lib/logic";
@@ -28,7 +31,7 @@ const fsWrap = (on: boolean): CSSProperties => ({
     position: "fixed" as const,
     inset: 0,
     zIndex: 40,
-    background: "rgb(16 16 16)",
+    background: rgb(T.canvas),
     overflow: "auto",
     padding: "16px 20px",
     boxSizing: "border-box" as const,
@@ -40,7 +43,7 @@ function Screen({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={S(
-        "min-height:100vh; display:flex; align-items:center; justify-content:center; background:rgb(16 16 16); color:rgb(139 148 158); font-family:'Inter',system-ui,-apple-system,sans-serif; padding:24px; box-sizing:border-box; text-align:center;",
+        `min-height:100vh; display:flex; align-items:center; justify-content:center; background:${rgb(T.canvas)}; color:${rgb(T.muted)}; font-family:'Inter',system-ui,-apple-system,sans-serif; padding:24px; box-sizing:border-box; text-align:center;`,
       )}
     >
       {children}
@@ -141,11 +144,11 @@ export default function Dashboard() {
     return (
       <Screen>
         <div>
-          <div style={S("font-size:15px; color:rgb(248 81 73); font-weight:600; margin-bottom:8px;")}>
+          <div style={S(`font-size:15px; color:${rgb(T.err)}; font-weight:600; margin-bottom:8px;`)}>
             データを取得できませんでした
           </div>
           <div style={S("font-size:13px; max-width:520px; line-height:1.6;")}>{error}</div>
-          <div style={S("font-size:11.5px; color:rgb(110 118 129); margin-top:12px;")}>
+          <div style={S(`font-size:11.5px; color:${rgb(T.mutedSoft)}; margin-top:12px;`)}>
             GITLAB_BASE_URL / GITLAB_PROJECT_ID / GITLAB_TOKEN を確認してください。
           </div>
         </div>
@@ -174,28 +177,28 @@ export default function Dashboard() {
   return (
     <div
       style={S(
-        "min-height:100vh; background:rgb(16 16 16); color:rgb(242 242 242); font-family:'Inter',system-ui,-apple-system,sans-serif; padding:28px 34px 52px; box-sizing:border-box;",
+        `min-height:100vh; background:${rgb(T.canvas)}; color:${rgb(T.ink)}; font-family:'Inter',system-ui,-apple-system,sans-serif; padding:28px 34px 52px; box-sizing:border-box;`,
       )}
     >
       {/* ── Header ── */}
       <div style={S("display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:22px;")}>
         <div>
           <div style={S("display:flex; align-items:center; gap:9px;")}>
-            <div style={S("width:8px; height:8px; border-radius:50%; background:rgb(0 217 146); box-shadow:0 0 10px rgb(0 217 146 / .85);")}></div>
-            <span style={S("font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>GitLab Issue Analytics</span>
+            <div style={S(`width:8px; height:8px; border-radius:50%; background:${rgb(T.primary)}; box-shadow:0 0 10px ${rgba(T.primary, .85)};`)}></div>
+            <span style={S(`font-size:11.5px; letter-spacing:.15em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>GitLab Issue Analytics</span>
           </div>
-          <h1 style={S("margin:9px 0 5px; font-size:26px; font-weight:700; color:rgb(255 255 255); letter-spacing:-.01em;")}>{v.project}</h1>
-          <div style={S("font-size:12.5px; color:rgb(139 148 158); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{v.repo} · {v.asOf} 時点 · 最終更新 {new Date(data.fetchedAt).toLocaleTimeString("ja-JP")}</div>
+          <h1 style={S(`margin:9px 0 5px; font-size:26px; font-weight:700; color:${rgb(T.ink)}; letter-spacing:-.01em;`)}>{v.project}</h1>
+          <div style={S(`font-size:12.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{v.repo} · {v.asOf} 時点 · 最終更新 {new Date(data.fetchedAt).toLocaleTimeString("ja-JP")}</div>
         </div>
         <div style={S("text-align:right;")}>
-          <div style={S("font-size:11px; color:rgb(110 118 129); text-transform:uppercase; letter-spacing:.09em; font-weight:600;")}>総イシュー</div>
-          <div style={S("font-size:13.5px; color:rgb(189 189 189); font-family:'JetBrains Mono',ui-monospace,monospace; margin-top:3px;")}>全 {v.totalCount} 件</div>
+          <div style={S(`font-size:11px; color:${rgb(T.mutedSoft)}; text-transform:uppercase; letter-spacing:.09em; font-weight:600;`)}>総イシュー</div>
+          <div style={S(`font-size:13.5px; color:${rgb(T.body)}; font-family:'JetBrains Mono',ui-monospace,monospace; margin-top:3px;`)}>全 {v.totalCount} 件</div>
         </div>
       </div>
 
       {/* ── Content tabs ── */}
       <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap;")}>
-        <span style={S("font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:rgb(110 118 129); font-weight:600;")}>表示</span>
+        <span style={S(`font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.mutedSoft)}; font-weight:600;`)}>表示</span>
         <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
         <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
         <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
@@ -209,50 +212,50 @@ export default function Dashboard() {
           <>
             {/* Summary metrics */}
             <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;")}>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>Open 件数</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>Open 件数</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{v.openCount}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.warn)};`)}>{v.openCount}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.openSub}</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{v.openSub}</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.warn, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>Close 件数</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>Close 件数</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(0 217 146);")}>{v.closedCount}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.primary)};`)}>{v.closedCount}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.closeSub}</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(0 217 146 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{v.closeSub}</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.primary, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>平均 Close 日数</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>平均 Close 日数</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);")}>{v.avgDays}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.ink)};`)}>{v.avgDays}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>日</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>closed issues</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)};`)}>closed issues</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.ink, .2)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>中央値 Close 日数</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>中央値 Close 日数</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(242 242 242);")}>{v.medDays}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.ink)};`)}>{v.medDays}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>日</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>closed issues</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(242 242 242 / .2);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)};`)}>closed issues</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.ink, .2)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>最長滞留 (Open)</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>最長滞留 (Open)</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{v.maxOpenDays}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>日</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.err)};`)}>{v.maxOpenDays}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>日</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.maxOpenSub}</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{v.maxOpenSub}</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.err, .45)};`)}></div>
               </div>
             </div>
 
@@ -260,21 +263,21 @@ export default function Dashboard() {
             <FilterControls v={v} st={st} showSort />
 
             {/* Ranked list */}
-            <section style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;")}>
+            <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`)}>
               <div style={S("display:flex; align-items:baseline; justify-content:flex-end; gap:12px; margin-bottom:3px;")}>
-                <span style={S("font-size:11.5px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;")}>上位 {v.topN} 件 · 単位 日</span>
+                <span style={S(`font-size:11.5px; color:${rgb(T.mutedSoft)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>上位 {v.topN} 件 · 単位 日</span>
               </div>
-              <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>
+              <p style={S(`margin:0 0 12px; font-size:12px; color:${rgb(T.muted)}; line-height:1.5;`)}>
                 バーが長いほど Open→Close に時間がかかっている。
-                <span style={{ color: "rgb(0 217 146)" }}>■</span>
+                <span style={{ color: rgb(T.primary) }}>■</span>
                 {"<30日 "}
-                <span style={{ color: "rgb(210 153 34)" }}>■</span>
+                <span style={{ color: rgb(T.warn) }}>■</span>
                 30日超{" "}
-                <span style={{ color: "rgb(248 81 73)" }}>■</span>
+                <span style={{ color: rgb(T.err) }}>■</span>
                 90日超 · 斜線は Open（未解決）。
               </p>
 
-              <div style={S("display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+              <div style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
                 <div></div>
                 <div style={S("position:relative; height:15px;")}>
                   {v.rankTicks.map((t, i) => (
@@ -284,14 +287,14 @@ export default function Dashboard() {
               </div>
 
               {v.rows.map((row, i) => (
-                <div key={i} style={S("display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+                <div key={i} style={S(`display:grid; grid-template-columns:224px minmax(0,1fr); align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
                   <div style={S("min-width:0;")}>
                     <div style={S("display:flex; align-items:center; gap:7px;")}>
-                      <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:rgb(110 118 129); width:20px; flex:0 0 auto;")}>{row.rankLabel}</span>
+                      <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:${rgb(T.mutedSoft)}; width:20px; flex:0 0 auto;`)}>{row.rankLabel}</span>
                       <span style={row.chipStyle}>{row.labelName}</span>
                     </div>
-                    <div style={S("font-size:12.5px; color:rgb(210 210 210); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{row.title}</div>
-                    <div style={S("font-size:10.5px; color:rgb(110 118 129); margin-top:2px; font-family:'JetBrains Mono',ui-monospace,monospace;")}>{row.meta}</div>
+                    <div style={S(`font-size:12.5px; color:${rgb(T.body)}; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{row.title}</div>
+                    <div style={S(`font-size:10.5px; color:${rgb(T.mutedSoft)}; margin-top:2px; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{row.meta}</div>
                   </div>
                   <div style={v.rankTrackStyle}>
                     <div style={row.barFillStyle}></div>
@@ -302,7 +305,7 @@ export default function Dashboard() {
               ))}
 
               {v.noRows && (
-                <div style={S("padding:26px 0; text-align:center; font-size:13px; color:rgb(110 118 129);")}>
+                <div style={S(`padding:26px 0; text-align:center; font-size:13px; color:${rgb(T.mutedSoft)};`)}>
                   条件に一致するイシューがありません。
                 </div>
               )}
@@ -312,18 +315,18 @@ export default function Dashboard() {
 
         {/* Distribution tab: box-plot over ALL issues (filter-independent) */}
         {v.showDist && (
-          <section style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:14px; padding:18px 20px 20px; min-width:0;")}>
+          <section style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:14px; padding:18px 20px 20px; min-width:0;`)}>
             <div style={S("display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:3px;")}>
-              <h2 style={S("margin:0; font-size:16px; font-weight:700; color:rgb(242 242 242);")}>Close 日数の分布（箱ひげ）</h2>
+              <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>Close 日数の分布（箱ひげ）</h2>
               <div style={S("display:flex; gap:6px;")}>
                 <button style={v.groupBtns.label.style} onClick={v.groupBtns.label.onClick}>ラベル</button>
                 <button style={v.groupBtns.assignee.style} onClick={v.groupBtns.assignee.onClick}>担当者</button>
                 <button style={v.groupBtns.milestone.style} onClick={v.groupBtns.milestone.onClick}>マイルストーン</button>
               </div>
             </div>
-            <p style={S("margin:0 0 12px; font-size:12px; color:rgb(139 148 158); line-height:1.5;")}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。Close済み3件未満は箱を描けないため各データ点＋中央値のみ表示。中央値が大きい順。行にホバーで詳細。全イシューが対象（フィルタ非依存）。</p>
+            <p style={S(`margin:0 0 12px; font-size:12px; color:${rgb(T.muted)}; line-height:1.5;`)}>箱＝Q1〜Q3、縦線＝中央値、ひげ＝1.5×IQR、点＝外れ値。Close済み3件未満は箱を描けないため各データ点＋中央値のみ表示。中央値が大きい順。行にホバーで詳細。全イシューが対象（フィルタ非依存）。</p>
 
-            <div style={S("display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid rgb(61 58 57 / .5);")}>
+            <div style={S(`display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid ${rgba(T.hairline, .5)};`)}>
               <div></div>
               <div style={S("position:relative; height:15px;")}>
                 {v.boxTicks.map((t, i) => (
@@ -337,8 +340,8 @@ export default function Dashboard() {
                 <div style={S("min-width:0; display:flex; align-items:center; gap:8px;")}>
                   <span style={g.dotStyle}></span>
                   <div style={S("min-width:0;")}>
-                    <div style={S("font-size:12.5px; color:rgb(230 230 230); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{g.name}</div>
-                    <div style={S("font-size:10px; color:rgb(110 118 129); font-family:'JetBrains Mono',ui-monospace,monospace;")}>{g.sub}</div>
+                    <div style={S(`font-size:12.5px; color:${rgb(T.body)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{g.name}</div>
+                    <div style={S(`font-size:10px; color:${rgb(T.mutedSoft)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{g.sub}</div>
                   </div>
                 </div>
                 <div style={v.boxTrackStyle}>
@@ -355,16 +358,16 @@ export default function Dashboard() {
             ))}
 
             {/* Hover detail */}
-            <div style={S("margin-top:14px; padding:12px 14px; background:rgb(22 22 22); border:1px solid rgb(61 58 57); border-radius:10px;")}>
+            <div style={S(`margin-top:14px; padding:12px 14px; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:10px;`)}>
               <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:11px;")}>
                 <span style={v.hoveredDetail.dotStyle}></span>
-                <span style={S("font-size:13px; font-weight:700; color:rgb(242 242 242);")}>{v.hoveredDetail.name}</span>
-                <span style={S("font-size:10.5px; color:rgb(110 118 129);")}>— 行にホバーで切替</span>
+                <span style={S(`font-size:13px; font-weight:700; color:${rgb(T.ink)};`)}>{v.hoveredDetail.name}</span>
+                <span style={S(`font-size:10.5px; color:${rgb(T.mutedSoft)};`)}>— 行にホバーで切替</span>
               </div>
               <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(66px,1fr)); gap:9px;")}>
                 {v.hoveredDetail.cells.map((cell, i) => (
                   <div key={i}>
-                    <div style={S("font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:rgb(110 118 129); font-weight:600;")}>{cell.k}</div>
+                    <div style={S(`font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:${rgb(T.mutedSoft)}; font-weight:600;`)}>{cell.k}</div>
                     <div style={cell.vStyle}>{cell.v}</div>
                   </div>
                 ))}
@@ -378,32 +381,32 @@ export default function Dashboard() {
           <>
             {/* Schedule-variance metrics (納期予実) — mirrors the ranking summary cards */}
             <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;")}>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>納期遵守率</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>納期遵守率</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(16 185 129);")}>{cs.adherenceRate ?? "—"}</span>
-                  {cs.adherenceRate !== null && <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>%</span>}
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.ok)};`)}>{cs.adherenceRate ?? "—"}</span>
+                  {cs.adherenceRate !== null && <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>%</span>}
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>期限内 {cs.onTime} ／ 完了&期限あり {cs.closedWithDue} 件</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(16 185 129 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>期限内 {cs.onTime} ／ 完了&期限あり {cs.closedWithDue} 件</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.ok, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>遅延完了</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>遅延完了</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{cs.late}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.err)};`)}>{cs.late}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{cs.avgLateDays !== null ? `平均 +${cs.avgLateDays} 日遅れ` : "遅延なし"}</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{cs.avgLateDays !== null ? `平均 +${cs.avgLateDays} 日遅れ` : "遅延なし"}</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.err, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>期限超過（進行中）</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>期限超過（進行中）</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{cs.overdue}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.warn)};`)}>{cs.overdue}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>予定日を過ぎた未完了</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)};`)}>予定日を過ぎた未完了</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.warn, .45)};`)}></div>
               </div>
             </div>
 
@@ -424,32 +427,32 @@ export default function Dashboard() {
         {v.showRoadmap && (
           <>
             <div style={S("display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;")}>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>納期遵守率</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>納期遵守率</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(16 185 129);")}>{v.roadmap.summary.adherenceRate ?? "—"}</span>
-                  {v.roadmap.summary.adherenceRate !== null && <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>%</span>}
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.ok)};`)}>{v.roadmap.summary.adherenceRate ?? "—"}</span>
+                  {v.roadmap.summary.adherenceRate !== null && <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>%</span>}
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>期限内 {v.roadmap.summary.onTime} ／ 完了&期限あり {v.roadmap.summary.closedWithDue} 件</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(16 185 129 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>期限内 {v.roadmap.summary.onTime} ／ 完了&期限あり {v.roadmap.summary.closedWithDue} 件</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.ok, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>遅延完了</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>遅延完了</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(248 81 73);")}>{v.roadmap.summary.late}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.err)};`)}>{v.roadmap.summary.late}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;")}>{v.roadmap.summary.avgLateDays !== null ? `平均 +${v.roadmap.summary.avgLateDays} 日遅れ` : "遅延なし"}</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(248 81 73 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`)}>{v.roadmap.summary.avgLateDays !== null ? `平均 +${v.roadmap.summary.avgLateDays} 日遅れ` : "遅延なし"}</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.err, .45)};`)}></div>
               </div>
-              <div style={S("background:rgb(26 26 26); border:1px solid rgb(61 58 57); border-radius:12px; padding:15px 17px;")}>
-                <div style={S("font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgb(139 148 158); font-weight:600;")}>期限超過（進行中）</div>
+              <div style={S(`background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px; padding:15px 17px;`)}>
+                <div style={S(`font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:600;`)}>期限超過（進行中）</div>
                 <div style={S("display:flex; align-items:baseline; gap:5px; margin-top:9px;")}>
-                  <span style={S("font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:rgb(210 153 34);")}>{v.roadmap.summary.overdue}</span>
-                  <span style={S("font-size:12.5px; color:rgb(139 148 158);")}>件</span>
+                  <span style={S(`font-family:'JetBrains Mono',ui-monospace,monospace; font-size:29px; font-weight:600; line-height:1; color:${rgb(T.warn)};`)}>{v.roadmap.summary.overdue}</span>
+                  <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>件</span>
                 </div>
-                <div style={S("margin-top:7px; font-size:11.5px; color:rgb(110 118 129);")}>予定日を過ぎた未完了</div>
-                <div style={S("height:3px; border-radius:2px; margin-top:11px; background:rgb(210 153 34 / .45);")}></div>
+                <div style={S(`margin-top:7px; font-size:11.5px; color:${rgb(T.mutedSoft)};`)}>予定日を過ぎた未完了</div>
+                <div style={S(`height:3px; border-radius:2px; margin-top:11px; background:${rgba(T.warn, .45)};`)}></div>
               </div>
             </div>
 
