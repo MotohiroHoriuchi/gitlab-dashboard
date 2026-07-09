@@ -121,7 +121,7 @@ export default function CalendarView({
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    `padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.body)};`,
+    `padding:2px 6px 5px; font-size:11.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.muted)};`,
   );
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
@@ -195,20 +195,20 @@ export default function CalendarView({
           `display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:11.5px; color:${rgb(T.body)};`,
         )}
       >
-        <Swatch style={{ background: rgba(MILESTONE_COLOR, 0.2), border: "1px solid " + rgba(MILESTONE_COLOR, 0.6) }} text="マイルストーン" />
+        <Swatch style={{ background: rgba(MILESTONE_COLOR, 0.12), border: "1px solid " + rgba(MILESTONE_COLOR, 0.45) }} text="マイルストーン" />
         <Swatch
           style={{
             background:
               "repeating-linear-gradient(45deg," +
-              rgba(T.primary, 0.5) +
+              rgba(T.primary, 0.2) +
               " 0 4px," +
-              rgba(T.primary, 0.16) +
+              rgba(T.primary, 0.06) +
               " 4px 8px)",
-            border: "1px solid " + rgba(T.primary, 0.75),
+            border: "1px solid " + rgba(T.primary, 0.4),
           }}
           text="進行中イシュー"
         />
-        <Swatch style={{ background: rgba(T.primary, 0.9), border: "1px solid " + rgb(T.primary) }} text="完了イシュー" />
+        <Swatch style={{ background: rgba(T.primary, 0.22), border: "1px solid " + rgba(T.primary, 0.5) }} text="完了イシュー" />
         <button
           type="button"
           onClick={() => setSparkle((n) => n + 1)}
@@ -270,6 +270,9 @@ export default function CalendarView({
             ))}
           </div>
           <div style={week.gridStyle}>
+            {week.weekendStrips.map((ws, i) => (
+              <div key={"we" + i} style={ws} />
+            ))}
             {week.todayStripStyle && <div style={week.todayStripStyle} />}
             {week.segments.map((s) => {
               if (s.kind === "overflow") {

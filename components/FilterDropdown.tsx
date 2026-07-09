@@ -178,6 +178,7 @@ export default function FilterDropdown({
                       height: "8px",
                       borderRadius: "50%",
                       background: rgb(o.color),
+                      boxShadow: `inset 0 0 0 1px ${rgba(T.ink, 0.12)}`,
                       flex: "0 0 auto",
                     }}
                   ></span>

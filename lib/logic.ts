@@ -330,6 +330,7 @@ export interface CalWeek {
   todayCol: number | null; // compressed column of today; null if out of row or hidden
   headStyle: CSSProperties; // day-number row grid (one column per visible day)
   gridStyle: CSSProperties; // bar grid container (relative, visible cols, auto-rows)
+  weekendStrips: CSSProperties[]; // tinted vertical bands behind weekend columns
   todayStripStyle: CSSProperties | null; // tinted vertical strip behind bars
 }
 /** One weekday chip of the "表示曜日" toggle group. */
@@ -556,12 +557,12 @@ export function renderVals(
           width: pct + "%",
           height: "12px",
           borderRadius: "4px",
-          border: "1px solid " + rgba(c, 0.8),
+          border: "1px solid " + rgba(c, 0.7),
           background:
             "repeating-linear-gradient(45deg," +
-            rgba(c, 0.42) +
+            rgba(c, 0.3) +
             " 0 5px," +
-            rgba(c, 0.12) +
+            rgba(c, 0.1) +
             " 5px 10px)",
           transition: "width .45s cubic-bezier(.4,0,.2,1)",
           flex: "0 0 auto",
@@ -591,9 +592,9 @@ export function renderVals(
         fontSize: "10.5px",
         fontWeight: 600,
         fontFamily: MONO,
-        background: rgba(it.label.color, 0.16),
-        color: rgb(it.label.color),
-        border: "1px solid " + rgba(it.label.color, 0.32),
+        background: rgba(it.label.color, 0.15),
+        color: rgb(T.ink),
+        border: "1px solid " + rgba(it.label.color, 0.45),
         flex: "0 0 auto",
       },
       isOpen: it.isOpen,
@@ -801,7 +802,7 @@ export function renderVals(
         left: P(g.wlo) + "%",
         width: P(g.whi) - P(g.wlo) + "%",
         height: "1.5px",
-        background: rgba(g.col, 0.7),
+        background: rgba(g.col, 0.85),
       },
       capLoStyle: {
         position: "absolute",
@@ -810,7 +811,7 @@ export function renderVals(
         left: P(g.wlo) + "%",
         width: "1.5px",
         height: "10px",
-        background: rgba(g.col, 0.7),
+        background: rgba(g.col, 0.85),
       },
       capHiStyle: {
         position: "absolute",
@@ -819,7 +820,7 @@ export function renderVals(
         left: P(g.whi) + "%",
         width: "1.5px",
         height: "10px",
-        background: rgba(g.col, 0.7),
+        background: rgba(g.col, 0.85),
       },
       rectStyle: {
         position: "absolute",
@@ -830,7 +831,7 @@ export function renderVals(
         height: "16px",
         borderRadius: "3px",
         background: rgba(g.col, 0.22),
-        border: "1px solid " + rgba(g.col, 0.65),
+        border: "1px solid " + rgba(g.col, 0.8),
         boxSizing: "border-box",
       },
       medianStyle,
@@ -1133,9 +1134,9 @@ function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
     fontFamily: SANS,
     fontWeight: 700,
     lineHeight: 1,
-    color: rgb(T.body),
+    color: rgb(T.ink),
     background: rgb(T.strong),
-    border: "1px solid " + rgba(T.hairline, 0.9),
+    border: "1px solid " + rgb(T.hairline),
     cursor: "pointer",
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -1373,7 +1374,7 @@ export const relBadgeStyle: CSSProperties = {
   lineHeight: 1,
   background: rgb(T.strong),
   color: rgb(T.ink),
-  border: "1px solid " + rgba(T.hairline, 0.9),
+  border: "1px solid " + rgb(T.hairline),
   position: "relative",
   zIndex: 1,
 };
@@ -1411,27 +1412,33 @@ function barStyle(
     color: rgb(T.ink),
     cursor: "pointer", // click-focus: highlight relations, dim the rest
   };
+  // Notion-tag scheme: ink text on a light tint of the item color; the color
+  // itself carries only via the tint, border and the solid start edge.
   if (it.track === "milestone") {
-    s.background = rgba(c, 0.2);
-    s.border = "1px solid " + rgba(c, 0.6);
+    s.background = rgba(c, 0.12);
+    s.border = "1px solid " + rgba(c, 0.45);
   } else if (it.isOpen) {
     // hatched = still open (mirrors the ranking gantt)
     s.background =
       "repeating-linear-gradient(45deg," +
-      rgba(c, 0.5) +
+      rgba(c, 0.2) +
       " 0 5px," +
-      rgba(c, 0.16) +
+      rgba(c, 0.06) +
       " 5px 10px)";
-    s.border = "1px solid " + rgba(c, 0.75);
+    s.border = "1px solid " + rgba(c, 0.4);
   } else {
-    s.background = rgba(c, 0.9);
-    s.border = "1px solid " + rgb(c);
+    s.background = rgba(c, 0.22);
+    s.border = "1px solid " + rgba(c, 0.5);
   }
+  // Solid accent edge only on the true start row, so a wrapped bar still
+  // reads as one continuous span (continuation rows keep the 1px border).
+  if (isStart) s.borderLeft = "3px solid " + rgb(c);
   // Checkpoints are always drawn (never collapsed) and stand out with an
   // amber ring so deadlines are impossible to miss. Must match the 0%/100%
   // frames of gi-checkpoint-glow in globals.css (the burst settles onto it).
   if (it.track === "issue" && it.isCheckpoint) {
     s.border = "1px solid " + rgb(CHECKPOINT_STAR);
+    if (isStart) s.borderLeft = "3px solid " + rgb(CHECKPOINT_STAR);
     s.boxShadow = "0 0 0 1px " + rgba(CHECKPOINT_STAR, 0.45);
   }
   return s;
@@ -1454,11 +1461,11 @@ function overrunStyle(
     borderRadius: roundRight ? "0 5px 5px 0" : "0",
     background:
       "repeating-linear-gradient(45deg," +
-      rgba(T.err, 0.85) +
+      rgba(T.err, 0.3) +
       " 0 5px," +
-      rgba(T.err, 0.4) +
+      rgba(T.err, 0.1) +
       " 5px 10px)",
-    border: "1px solid " + rgba(T.err, 0.9),
+    border: "1px solid " + rgba(T.err, 0.55),
     borderLeft: "none",
     pointerEvents: "none",
   };
@@ -1635,9 +1642,15 @@ export function buildCalendar(
         isWeekend,
         headStyle: {
           padding: "3px 6px 2px",
-          borderLeft: "1px solid " + rgba(T.hairline, 0.5),
+          borderLeft: "1px solid " + rgb(T.hairline),
           borderTop: isToday ? "2px solid " + rgb(T.primary) : "2px solid transparent",
-          background: isToday ? rgba(T.primary, 0.08) : "transparent",
+          // weekend tint matches the lane-area weekendStrips so the two rows
+          // read as one continuous column band
+          background: isToday
+            ? rgba(T.primary, 0.07)
+            : isWeekend
+              ? rgba(T.ink, 0.03)
+              : "transparent",
           boxSizing: "border-box",
         },
         numStyle: {
@@ -1647,7 +1660,7 @@ export function buildCalendar(
           color: isToday
             ? rgb(T.primary)
             : isOtherMonth
-              ? rgba(T.muted, 0.55)
+              ? rgb(T.mutedSoft)
               : isWeekend
                 ? rgb(T.muted)
                 : rgb(T.body),
@@ -1800,6 +1813,22 @@ export function buildCalendar(
     // hidden weekday (then no strip and no header highlight).
     const todayOff = todayIndex >= rowStart && todayIndex <= rowEnd ? todayIndex - rowStart : -1;
     const todayCol = todayOff >= 0 && colFor[todayOff] >= 0 ? colFor[todayOff] : null;
+    // Weekend bands behind the lane area. Translucent (not opaque) so the
+    // gridStyle backgroundImage column lines stay visible underneath; the
+    // tint value matches headStyle's weekend background above.
+    const weekendStrips: CSSProperties[] = [];
+    days.forEach((d, col) => {
+      if (!d.isWeekend) return;
+      weekendStrips.push({
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: (col / nCols) * 100 + "%",
+        width: 100 / nCols + "%",
+        background: rgba(T.ink, 0.03),
+        pointerEvents: "none",
+      });
+    });
     weeksOut.push({
       key: "w" + rowStart,
       days,
@@ -1815,8 +1844,16 @@ export function buildCalendar(
         rowGap: "3px",
         padding: "5px 0 7px",
         minHeight: laneHeight + "px",
-        borderTop: "1px solid " + rgba(T.hairline, 0.4),
+        borderTop: "1px solid " + rgb(T.hairline),
+        // vertical day-boundary hairlines through the whole lane area — the
+        // day-number row's borderLeft alone leaves the lanes boundary-less
+        backgroundImage: `linear-gradient(90deg, ${rgb(T.hairline)} 1px, transparent 1px)`,
+        backgroundSize: `calc(100% / ${nCols}) 100%`,
+        // close the grid under the last week (other weeks are closed by the
+        // next week's borderTop)
+        borderBottom: r === weeks - 1 ? "1px solid " + rgb(T.hairline) : undefined,
       },
+      weekendStrips,
       todayStripStyle:
         todayCol !== null
           ? {
@@ -1878,6 +1915,8 @@ export function buildCalendar(
       display: "grid",
       gridTemplateColumns: `repeat(${nCols},minmax(0,1fr))`,
       marginTop: "4px",
+      background: rgb(T.canvas),
+      borderRadius: "6px 6px 0 0",
     },
     title,
     modeBtns: {

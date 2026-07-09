@@ -65,9 +65,9 @@ export default function HoverTip({ tip, x, y }: { tip: CalTip; x: number; y: num
             fontSize: "10.5px",
             fontWeight: 600,
             fontFamily: MONO,
-            background: rgba(tip.color, 0.16),
-            color: rgb(tip.color),
-            border: "1px solid " + rgba(tip.color, 0.32),
+            background: rgba(tip.color, 0.15),
+            color: rgb(T.ink),
+            border: "1px solid " + rgba(tip.color, 0.45),
           }}
         >
           {tip.labelName}
