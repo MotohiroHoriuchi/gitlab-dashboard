@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#1f2937" />
+    <link rel="icon" href="../app/icon.svg" type="image/svg+xml" />
+    <title>操作マニュアル｜GitLab イシュー分析ダッシュボード</title>
+    <meta
+      name="description"
+      content="GitLab イシュー分析ダッシュボードの起動、絞り込み、4つのビュー、会議での使い方を画面付きで説明する操作マニュアル。"
+    />
+    <style>
+      :root {
+        --paper: #f4f1eb;
+        --surface: #fffdf8;
+        --surface-strong: #ffffff;
+        --ink: #1f2937;
+        --body: #384152;
+        --muted: #687386;
+        --line: #d8d2c7;
+        --line-strong: #b9b1a4;
+        --accent: #c2410c;
+        --accent-soft: #ffedd5;
+        --accent-ink: #9a3412;
+        --nav: #202733;
+        --nav-soft: #303948;
+        --ok: #16754a;
+        --warn: #a16207;
+        --danger: #b42318;
+        --code: #18202c;
+        --shadow: 0 10px 28px rgb(31 41 55 / 9%);
+        --radius: 16px;
+        --content: 920px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+      }
+
+      body {
+        margin: 0;
+        color: var(--body);
+        background: var(--paper);
+        font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, Meiryo, sans-serif;
+        font-size: 16px;
+        line-height: 1.8;
+      }
+
+      a {
+        color: var(--accent-ink);
+        text-underline-offset: 0.18em;
+      }
+
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+
+      :focus-visible {
+        outline: 3px solid #f59e0b;
+        outline-offset: 3px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        color: var(--ink);
+        line-height: 1.35;
+        text-wrap: balance;
+      }
+
+      p,
+      li,
+      dd {
+        text-wrap: pretty;
+      }
+
+      code,
+      .mono,
+      .eyebrow,
+      .step-number,
+      .meta,
+      .kbd,
+      th {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .skip-link {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 20;
+        padding: 8px 12px;
+        color: #fff;
+        background: var(--accent);
+        transform: translateY(-160%);
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .layout {
+        min-height: 100dvh;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100dvh;
+        overflow-y: auto;
+        padding: 28px 24px;
+        color: #e5e7eb;
+        background: var(--nav);
+        border-right: 4px solid var(--accent);
+      }
+
+      .product-mark {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        color: #fff;
+        font-weight: 800;
+        line-height: 1.45;
+      }
+
+      .product-mark::before {
+        content: "";
+        flex: 0 0 auto;
+        width: 12px;
+        height: 12px;
+        background: var(--accent);
+        border: 3px solid #fed7aa;
+        transform: rotate(45deg);
+      }
+
+      .sidebar .meta {
+        margin: 0 0 26px;
+        color: #aeb7c6;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .toc-title {
+        margin: 0 0 8px;
+        color: #9ca3af;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .toc {
+        display: grid;
+        gap: 4px;
+      }
+
+      .toc a {
+        display: block;
+        padding: 7px 9px;
+        color: #d5dae3;
+        border-left: 2px solid transparent;
+        text-decoration: none;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .toc a:hover,
+      .toc a:focus-visible {
+        color: #fff;
+        background: var(--nav-soft);
+        border-left-color: #fdba74;
+      }
+
+      .sidebar-note {
+        margin-top: 28px;
+        padding: 12px;
+        color: #c8cfda;
+        background: #171d27;
+        border: 1px solid #424c5d;
+        border-radius: 10px;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      main {
+        min-width: 0;
+        padding-bottom: 80px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 64px max(32px, calc((100% - var(--content)) / 2)) 54px;
+        color: #fff;
+        background: var(--nav);
+        border-bottom: 8px solid var(--accent);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        right: -58px;
+        bottom: -94px;
+        width: 280px;
+        height: 280px;
+        border: 44px solid rgb(255 255 255 / 6%);
+        border-radius: 50%;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 14px;
+        color: #fdba74;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 28px;
+        height: 3px;
+        background: var(--accent);
+      }
+
+      .hero h1 {
+        max-width: 760px;
+        margin: 0;
+        color: #fff;
+        font-size: clamp(34px, 5vw, 62px);
+      }
+
+      .hero-lead {
+        max-width: 710px;
+        margin: 20px 0 0;
+        color: #d1d7e1;
+        font-size: clamp(16px, 2vw, 20px);
+        line-height: 1.75;
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        margin-top: 30px;
+        color: #aeb7c6;
+        font-size: 12px;
+      }
+
+      .content {
+        width: min(var(--content), calc(100% - 48px));
+        margin: 0 auto;
+      }
+
+      section {
+        scroll-margin-top: 24px;
+        padding-top: 72px;
+      }
+
+      .section-kicker {
+        margin: 0 0 4px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      section > h2 {
+        margin: 0 0 14px;
+        font-size: clamp(26px, 4vw, 38px);
+      }
+
+      .section-lead {
+        max-width: 760px;
+        margin: 0 0 28px;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      h3 {
+        margin: 36px 0 12px;
+        font-size: 21px;
+      }
+
+      .quick-grid,
+      .card-grid,
+      .recipe-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .quick-card,
+      .card,
+      .recipe,
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      .quick-card,
+      .card,
+      .recipe {
+        padding: 22px;
+      }
+
+      .quick-card h3,
+      .card h3,
+      .recipe h3 {
+        margin: 0 0 8px;
+      }
+
+      .quick-card p,
+      .card p,
+      .recipe p {
+        margin: 0;
+      }
+
+      .quick-card .meta {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .command {
+        position: relative;
+        overflow-x: auto;
+        margin: 14px 0 0;
+        padding: 15px 17px;
+        color: #e5e7eb;
+        background: var(--code);
+        border-left: 4px solid var(--accent);
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.7;
+        white-space: pre;
+      }
+
+      .callout {
+        margin: 18px 0;
+        padding: 16px 18px;
+        background: var(--accent-soft);
+        border: 1px solid #fed7aa;
+        border-left: 5px solid var(--accent);
+        border-radius: 10px;
+      }
+
+      .callout strong {
+        color: var(--accent-ink);
+      }
+
+      .callout p {
+        margin: 0;
+      }
+
+      .callout.info {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        border-left-color: #2563eb;
+      }
+
+      .callout.info strong {
+        color: #1d4ed8;
+      }
+
+      .screen {
+        margin: 26px 0 12px;
+        overflow: hidden;
+        background: var(--surface-strong);
+        border: 1px solid var(--line-strong);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+      }
+
+      .screen img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .screen figcaption {
+        display: flex;
+        gap: 10px;
+        padding: 12px 15px;
+        color: var(--muted);
+        background: #f8f6f1;
+        border-top: 1px solid var(--line);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .screen figcaption::before {
+        content: "FIG";
+        color: var(--accent);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .steps {
+        display: grid;
+        gap: 12px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: manual-step;
+      }
+
+      .steps > li {
+        position: relative;
+        min-height: 60px;
+        padding: 16px 18px 16px 68px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        counter-increment: manual-step;
+      }
+
+      .steps > li::before {
+        content: counter(manual-step, decimal-leading-zero);
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        color: #fff;
+        background: var(--accent);
+        border-radius: 8px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .steps strong {
+        color: var(--ink);
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 12px 0;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 3px 10px;
+        color: var(--ink);
+        background: #f7f4ee;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .chip.active {
+        color: var(--accent-ink);
+        background: var(--accent-soft);
+        border-color: #fdba74;
+      }
+
+      .recipe {
+        position: relative;
+        padding-top: 58px;
+      }
+
+      .recipe::before {
+        content: attr(data-label);
+        position: absolute;
+        top: 20px;
+        left: 22px;
+        color: var(--accent);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .recipe ol {
+        margin: 14px 0 0;
+        padding-left: 1.4em;
+      }
+
+      .recipe li + li {
+        margin-top: 5px;
+      }
+
+      .panel {
+        overflow: hidden;
+        margin-top: 24px;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+        color: #fff;
+        background: var(--nav);
+      }
+
+      .panel-header h3 {
+        margin: 0;
+        color: #fff;
+      }
+
+      .panel-header .mono {
+        color: #fdba74;
+        font-size: 11px;
+      }
+
+      .panel-body {
+        padding: 20px;
+      }
+
+      .panel-body > :first-child {
+        margin-top: 0;
+      }
+
+      .panel-body > :last-child {
+        margin-bottom: 0;
+      }
+
+      table {
+        width: 100%;
+        margin: 16px 0;
+        border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--ink);
+        background: #ede9e1;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .legend li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      .swatch {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin-top: 6px;
+        background: var(--ok);
+        border-radius: 4px;
+      }
+
+      .swatch.warn {
+        background: var(--warn);
+      }
+
+      .swatch.danger {
+        background: var(--danger);
+      }
+
+      .swatch.hatch {
+        position: relative;
+        overflow: hidden;
+        color: #b42318;
+        background: #fee2e2;
+        border: 1px solid #b42318;
+      }
+
+      .swatch.hatch::after {
+        content: "///";
+        position: absolute;
+        inset: -6px 0 0 -5px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        font-weight: 900;
+        transform: rotate(-18deg);
+      }
+
+      .kbd {
+        display: inline-block;
+        min-width: 28px;
+        padding: 1px 7px;
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid var(--line-strong);
+        border-bottom-width: 3px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      details {
+        margin: 10px 0;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      summary {
+        padding: 13px 16px;
+        color: var(--ink);
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      details > div {
+        padding: 0 16px 16px;
+      }
+
+      footer {
+        width: min(var(--content), calc(100% - 48px));
+        margin: 72px auto 0;
+        padding-top: 18px;
+        color: var(--muted);
+        border-top: 1px solid var(--line-strong);
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          display: block;
+        }
+
+        .sidebar {
+          position: relative;
+          height: auto;
+          padding: 18px 24px;
+          border-right: 0;
+          border-bottom: 4px solid var(--accent);
+        }
+
+        .product-mark,
+        .sidebar .meta {
+          margin-bottom: 6px;
+        }
+
+        .toc-title,
+        .sidebar-note {
+          display: none;
+        }
+
+        .toc {
+          display: flex;
+          gap: 4px;
+          overflow-x: auto;
+          padding-top: 8px;
+        }
+
+        .toc a {
+          flex: 0 0 auto;
+          border-left: 0;
+          border-bottom: 2px solid transparent;
+        }
+      }
+
+      @media (max-width: 700px) {
+        body {
+          background: var(--paper);
+        }
+
+        .hero {
+          padding: 44px 24px 40px;
+        }
+
+        .content,
+        footer {
+          width: min(100% - 28px, var(--content));
+        }
+
+        section {
+          padding-top: 56px;
+        }
+
+        .quick-grid,
+        .card-grid,
+        .recipe-grid,
+        .legend {
+          grid-template-columns: 1fr;
+        }
+
+        .quick-card,
+        .card,
+        .recipe,
+        .panel-body {
+          padding: 18px;
+        }
+
+        .recipe {
+          padding-top: 52px;
+        }
+
+        .screen {
+          margin-inline: -4px;
+          border-radius: 10px;
+        }
+
+        table {
+          display: block;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+      }
+
+      @media print {
+        @page {
+          margin: 15mm;
+        }
+
+        body {
+          color: #111;
+          background: #fff;
+          font-size: 10pt;
+        }
+
+        .layout {
+          display: block;
+        }
+
+        .sidebar,
+        .skip-link {
+          display: none;
+        }
+
+        .hero {
+          padding: 10mm 0;
+          color: #111;
+          background: #fff;
+          border-bottom: 2px solid #111;
+        }
+
+        .hero h1,
+        .hero-lead,
+        .hero-meta {
+          color: #111;
+        }
+
+        .content,
+        footer {
+          width: 100%;
+        }
+
+        section {
+          padding-top: 10mm;
+        }
+
+        .quick-card,
+        .card,
+        .recipe,
+        .panel,
+        .screen {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+
+        .screen img {
+          max-height: 150mm;
+          object-fit: contain;
+        }
+
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <div class="layout">
+      <aside class="sidebar" aria-label="マニュアル目次">
+        <div class="product-mark">GitLab Issue Dashboard</div>
+        <p class="meta">USER MANUAL · v1.2.0<br />更新日 2026-07-17</p>
+        <p class="toc-title">Contents</p>
+        <nav class="toc">
+          <a href="#start">01 はじめる</a>
+          <a href="#screen">02 画面の見方</a>
+          <a href="#filters">03 絞り込む</a>
+          <a href="#ranking">04 長引きを探す</a>
+          <a href="#distribution">05 傾向を比べる</a>
+          <a href="#calendar">06 遅れを確認する</a>
+          <a href="#roadmap">07 目標を追う</a>
+          <a href="#meeting">08 会議で使う</a>
+          <a href="#input">09 GitLab側の整え方</a>
+          <a href="#trouble">10 困ったとき</a>
+        </nav>
+        <div class="sidebar-note">
+          このダッシュボードは閲覧専用です。タイトル、担当者、期限、ラベル、マイルストーンの編集は GitLab で行います。
+        </div>
+      </aside>
+
+      <main id="main">
+        <header class="hero">
+          <p class="eyebrow">Field guide / 操作マニュアル</p>
+          <h1>「遅れてる？」を、<br />迷わず確かめる。</h1>
+          <p class="hero-lead">
+            起動から絞り込み、4つのビューの使い分け、会議での見せ方まで。日々よく使う操作を画面付きで説明します。
+          </p>
+          <div class="hero-meta mono">
+            <span>対象バージョン 1.2.0</span>
+            <span>既定URL http://localhost:48273</span>
+            <span>データ更新 60秒ごと</span>
+          </div>
+        </header>
+
+        <div class="content">
+          <section id="start">
+            <p class="section-kicker mono">01 / GET STARTED</p>
+            <h2>まず画面を開く</h2>
+            <p class="section-lead">
+              動作確認だけなら GitLab の認証情報は不要です。実データで使うときは、先に管理者が接続設定を済ませます。
+            </p>
+
+            <div class="quick-grid">
+              <article class="quick-card">
+                <span class="meta">TRY WITH SAMPLE DATA</span>
+                <h3>サンプルデータで試す</h3>
+                <p>4つのビューと遅延表示をすぐ確認できます。</p>
+                <pre class="command"><code>npm install
+MOCK_GITLAB=1 npm run dev</code></pre>
+              </article>
+              <article class="quick-card">
+                <span class="meta">USE YOUR GITLAB DATA</span>
+                <h3>実データで使う</h3>
+                <p><code>.env.local</code> に接続先、プロジェクト、トークンを設定して起動します。</p>
+                <pre class="command"><code>cp .env.example .env.local
+npm run dev</code></pre>
+              </article>
+            </div>
+
+            <ol class="steps">
+              <li><strong>ターミナルで起動します。</strong>「Ready」と表示されたら準備完了です。</li>
+              <li><strong>ブラウザで <code>http://localhost:48273</code> を開きます。</strong></li>
+              <li><strong>画面上部のプロジェクト名と最終更新時刻を確認します。</strong>別プロジェクト名や古い時刻なら、操作前に接続設定を確認します。</li>
+            </ol>
+
+            <div class="callout">
+              <p><strong>データは自動更新されます。</strong> 画面は60秒ごとに再取得します。GitLabで変更した直後は、最大約60秒待ってから確認してください。</p>
+            </div>
+          </section>
+
+          <section id="screen">
+            <p class="section-kicker mono">02 / ORIENTATION</p>
+            <h2>4つのビュー</h2>
+            <p class="section-lead">
+              上部の4つのボタンが入口です。迷ったら、知りたいことに合わせて選びます。
+            </p>
+
+            <figure class="screen">
+              <img src="overview.gif" alt="イシュー一覧、Close日数の分布、カレンダー、ロードマップを切り替える操作" width="1400" height="763" />
+              <figcaption>画面上部の「表示」から4ビューを切り替えます。</figcaption>
+            </figure>
+
+            <div class="card-grid">
+              <article class="card">
+                <h3>イシュー一覧</h3>
+                <p><strong>どの仕事が長引いているか</strong>を確認。日々のトリアージの最初に使います。</p>
+              </article>
+              <article class="card">
+                <h3>Close日数の分布</h3>
+                <p><strong>何が、誰が時間を使っているか</strong>を比較。月次やスプリントの振り返り向けです。</p>
+              </article>
+              <article class="card">
+                <h3>カレンダー</h3>
+                <p><strong>いつからいつまで、どれが遅れているか</strong>を確認。直近2週間の調整に向きます。</p>
+              </article>
+              <article class="card">
+                <h3>ロードマップ</h3>
+                <p><strong>マイルストーンが期限までに終わりそうか</strong>を確認。目標単位の進捗共有に使います。</p>
+              </article>
+            </div>
+          </section>
+
+          <section id="filters">
+            <p class="section-kicker mono">03 / FILTER</p>
+            <h2>見たい範囲だけに絞り込む</h2>
+            <p class="section-lead">
+              状態・ラベル・担当者・マイルストーンの選択は、イシュー一覧とカレンダーで共通です。選択後の件数は右端の「該当」で確認できます。
+            </p>
+
+            <div class="chips" aria-label="絞り込み操作の例">
+              <span class="chip active">Open</span>
+              <span class="chip">ラベル 2</span>
+              <span class="chip">担当者 1</span>
+              <span class="chip">マイルストーン ▾</span>
+              <span class="chip">該当 4件 / 全34件</span>
+            </div>
+
+            <ol class="steps">
+              <li><strong>状態を選びます。</strong> 未完了だけなら「Open」、完了分だけなら「Closed」、両方なら「すべて」です。</li>
+              <li><strong>「ラベル」「担当者」「マイルストーン」を押します。</strong> 候補が多いときは、先頭の検索欄に名前の一部を入力します。</li>
+              <li><strong>候補を複数選択できます。</strong> ボタンに表示される数字が選択中の件数です。</li>
+              <li><strong>解除するときはポップアップ下部の「選択をクリア」を押します。</strong></li>
+            </ol>
+
+            <table>
+              <thead>
+                <tr><th>選び方</th><th>判定</th><th>例</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>同じ項目内で複数選択</td><td>いずれかに一致</td><td>ラベル「bug」「urgent」→どちらかを持つイシュー</td></tr>
+                <tr><td>項目をまたいで選択</td><td>すべてに一致</td><td>Open ＋ 担当者「田中」→田中さんの未完了イシュー</td></tr>
+                <tr><td>何も選ばない</td><td>その項目では絞らない</td><td>担当者が未選択→全担当者</td></tr>
+              </tbody>
+            </table>
+
+            <div class="callout info">
+              <p><strong>Close日数の分布はフィルタの影響を受けません。</strong> 分布ビューでは、右上の「ラベル／担当者／マイルストーン」で集計の切り口を変えます。</p>
+            </div>
+          </section>
+
+          <section id="ranking">
+            <p class="section-kicker mono">04 / TRIAGE</p>
+            <h2>長引いている仕事を探す</h2>
+            <p class="section-lead">
+              イシュー一覧は、滞留日数を横棒で並べます。斜線のバーはOpen、単色のバーはClosedです。
+            </p>
+
+            <figure class="screen">
+              <img src="ranking.png" alt="イシュー一覧ビュー。サマリー、フィルタ、滞留日数の横棒が表示されている" width="2880" height="1800" loading="lazy" />
+              <figcaption>イシュー一覧。上部の指標で全体を見てから、長いバーを確認します。</figcaption>
+            </figure>
+
+            <ol class="steps">
+              <li><strong>「イシュー一覧」を開きます。</strong></li>
+              <li><strong>未解決の詰まりを探すなら「Open」→「長引き順」。</strong> 上から確認すれば、滞留が長い順に見られます。</li>
+              <li><strong>バー左側でラベル・タイトル・担当者・マイルストーンを確認します。</strong></li>
+              <li><strong>対象を狭めたいときはラベルや担当者を追加します。</strong> 右端の該当件数が想定どおりか確認します。</li>
+            </ol>
+
+            <ul class="legend">
+              <li><span class="swatch"></span><span><strong>緑</strong><br />30日未満</span></li>
+              <li><span class="swatch warn"></span><span><strong>黄</strong><br />30日超</span></li>
+              <li><span class="swatch danger"></span><span><strong>赤</strong><br />90日超</span></li>
+              <li><span class="swatch hatch"></span><span><strong>斜線</strong><br />Open（未解決）</span></li>
+            </ul>
+
+            <div class="callout">
+              <p><strong>見る順番のおすすめ：</strong>「最長滞留（Open）」→一覧先頭のタイトル→担当者・マイルストーン。長期化の理由や次のアクションはGitLabのイシューで確認します。</p>
+            </div>
+          </section>
+
+          <section id="distribution">
+            <p class="section-kicker mono">05 / RETROSPECTIVE</p>
+            <h2>時間のかかり方を比べる</h2>
+            <p class="section-lead">
+              Close済みイシューの所要日数を、ラベル・担当者・マイルストーン単位で比較します。中央値が大きい順に並びます。
+            </p>
+
+            <figure class="screen">
+              <img src="distribution.png" alt="Close日数の分布ビュー。ラベル別の箱ひげ図が並んでいる" width="2880" height="1800" loading="lazy" />
+              <figcaption>箱が右にあるグループほど、完了までの日数が長い傾向です。</figcaption>
+            </figure>
+
+            <ol class="steps">
+              <li><strong>「Close日数の分布」を開きます。</strong></li>
+              <li><strong>右上で「ラベル」「担当者」「マイルストーン」のいずれかを選びます。</strong></li>
+              <li><strong>気になる行にマウスを重ねます。</strong> 下部に件数、未解決、最小、中央値、最大などが表示されます。</li>
+              <li><strong>中央値だけでなく件数も確認します。</strong> 1〜2件のグループは箱ではなく個々の点で表示されるため、傾向判断には注意します。</li>
+            </ol>
+
+            <table>
+              <thead><tr><th>表示</th><th>読み方</th></tr></thead>
+              <tbody>
+                <tr><td>箱</td><td>中央50%のイシューが収まる範囲（Q1〜Q3）</td></tr>
+                <tr><td>箱の中の縦線</td><td>中央値。代表的な所要日数を見るときの基準</td></tr>
+                <tr><td>ひげ</td><td>一般的なばらつきの範囲</td></tr>
+                <tr><td>点</td><td>外れ値、または件数が少ないグループの各データ</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="calendar">
+            <p class="section-kicker mono">06 / SCHEDULE</p>
+            <h2>遅れと直近の予定を確認する</h2>
+            <p class="section-lead">
+              カレンダーは、マイルストーンとイシューを同じ時間軸に並べます。赤い斜線が、予定日を過ぎた期間です。
+            </p>
+
+            <figure class="screen">
+              <img src="calendar.png" alt="カレンダービュー。月表示にマイルストーンとイシューのバー、期限超過の赤い斜線が表示されている" width="2880" height="1800" loading="lazy" />
+              <figcaption>カレンダー。通常は「2週」で直近を見て、全体日程を見たいときに「月」へ切り替えます。</figcaption>
+            </figure>
+
+            <div class="panel">
+              <div class="panel-header"><h3>基本操作</h3><span class="mono">CALENDAR CONTROLS</span></div>
+              <div class="panel-body">
+                <ol class="steps">
+                  <li><strong>「2週」または「月」を選びます。</strong> 2週は日々の調整、月は俯瞰に向きます。</li>
+                  <li><strong>「‹」「今日」「›」で期間を移動します。</strong> 迷ったら「今日」で現在の期間に戻ります。</li>
+                  <li><strong>バーにマウスを重ねます。</strong> #ID、担当者、ラベル、期間、期限、予実差分を確認できます。</li>
+                  <li><strong>バーをクリックします。</strong> 所属マイルストーンや関係するイシューが強調され、ほかが薄くなります。もう一度押すか、外側を押すと解除します。</li>
+                  <li><strong>「+N件」を押します。</strong> その日の全予定が開きます。項目を選ぶと、カレンダー上の関係を強調できます。</li>
+                </ol>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img src="calendar-tooltip.png" alt="カレンダーのバーにマウスを重ねたときの詳細ツールチップ" width="2120" height="610" loading="lazy" />
+              <figcaption>バーにマウスを重ねると、状態・期間・期限・予実差分まで確認できます。</figcaption>
+            </figure>
+
+            <h3>赤い斜線と予定線の読み方</h3>
+            <table>
+              <thead><tr><th>状態</th><th>画面表示</th><th>意味</th></tr></thead>
+              <tbody>
+                <tr><td>期限内に完了</td><td>完了イシューの単色バー</td><td>予定日までにClose</td></tr>
+                <tr><td>遅れて完了</td><td>予定日以降が赤い斜線</td><td>予定日からClose日までが超過</td></tr>
+                <tr><td>期限超過・進行中</td><td>予定日以降、今日まで赤い斜線</td><td>まだOpenで予定日を超過</td></tr>
+                <tr><td>期限なし・進行中</td><td>赤い斜線なし</td><td>予実差分は判定できない</td></tr>
+              </tbody>
+            </table>
+
+            <h3>表示曜日とチェックポイント</h3>
+            <ul>
+              <li>凡例右側の「月〜日」チップを押すと、その曜日を表示／非表示にできます。既定では土日が非表示です。</li>
+              <li>曜日設定はブラウザに保存され、次回も引き継がれます。</li>
+              <li>凡例の「★ チェックポイント」を押すと、重要な予定だけが一時的に強調されます。</li>
+            </ul>
+
+            <figure class="screen">
+              <img src="checkpoint-glow.gif" alt="カレンダー凡例の星を押してチェックポイントを強調する操作" width="900" height="450" loading="lazy" />
+              <figcaption>会議で重要な判断点を示したいときは、凡例の★を押します。</figcaption>
+            </figure>
+          </section>
+
+          <section id="roadmap">
+            <p class="section-kicker mono">07 / MILESTONE</p>
+            <h2>目標までの残作業を追う</h2>
+            <p class="section-lead">
+              ロードマップは1マイルストーンを1行で表示します。左側で完了率と残数、右側で期間と未完了イシューの期限を見ます。
+            </p>
+
+            <figure class="screen">
+              <img src="roadmap.png" alt="ロードマップビュー。マイルストーンごとの進捗、スパークライン、期間バー、未完了イシューの締切が表示されている" width="1490" height="812" loading="lazy" />
+              <figcaption>ロードマップ。縦線は本日、tickは未完了イシューの締切です。</figcaption>
+            </figure>
+
+            <ol class="steps">
+              <li><strong>「ロードマップ」を開きます。</strong> 状態フィルタはありません。進捗計算にOpenとClosedの両方が必要なためです。</li>
+              <li><strong>左側の完了率・残数・超過件数を確認します。</strong> スパークの実線は残数、破線は理想的な減り方です。</li>
+              <li><strong>右側で本日線と期限の位置を比べます。</strong> 赤いtickは期限超過、★はチェックポイントです。</li>
+              <li><strong>行をクリックします。</strong> 大きなバーンダウンと「超過／今週／それ以降」の残作業一覧が展開します。</li>
+              <li><strong>もう一度行を押すか <span class="kbd">Esc</span> で閉じます。</strong> 「+N」を押した一覧は、外側クリックでも閉じられます。</li>
+            </ol>
+
+            <div class="callout info">
+              <p><strong>日程が表示されない場合：</strong> GitLabのマイルストーンに開始日または期限を設定してください。日付がないマイルストーンは、時間軸上のバーを描けません。</p>
+            </div>
+          </section>
+
+          <section id="meeting">
+            <p class="section-kicker mono">08 / PRESENT</p>
+            <h2>会議用の全画面表示</h2>
+            <p class="section-lead">
+              カレンダーとロードマップには全画面モードがあります。ヘッダーやほかの指標を隠し、フィルタと現在のビューだけを画面いっぱいに表示します。
+            </p>
+
+            <figure class="screen">
+              <img src="fullscreen.gif" alt="カレンダーの全画面ボタンを押し、フィルタとビューだけを表示する操作" width="1400" height="763" loading="lazy" />
+              <figcaption>「⛶ 全画面」を押すと、会議で必要な範囲だけが残ります。</figcaption>
+            </figure>
+
+            <div class="recipe-grid">
+              <article class="recipe" data-label="DAILY / 3 MIN">
+                <h3>朝会で詰まりを確認</h3>
+                <ol>
+                  <li>イシュー一覧</li>
+                  <li>Open → 長引き順</li>
+                  <li>上位3件の次アクションを確認</li>
+                </ol>
+              </article>
+              <article class="recipe" data-label="WEEKLY / 5 MIN">
+                <h3>週次で遅れを確認</h3>
+                <ol>
+                  <li>カレンダー → 2週</li>
+                  <li>期限超過（進行中）を確認</li>
+                  <li>全画面で担当者・予定を共有</li>
+                </ol>
+              </article>
+              <article class="recipe" data-label="REVIEW / 10 MIN">
+                <h3>振り返りで傾向を比較</h3>
+                <ol>
+                  <li>Close日数の分布</li>
+                  <li>ラベル→担当者の順に切替</li>
+                  <li>中央値と件数を記録</li>
+                </ol>
+              </article>
+              <article class="recipe" data-label="PLANNING / 10 MIN">
+                <h3>計画会議で残作業を確認</h3>
+                <ol>
+                  <li>ロードマップ</li>
+                  <li>対象マイルストーンに絞る</li>
+                  <li>行を開き、超過／今週を確認</li>
+                </ol>
+              </article>
+            </div>
+
+            <div class="callout">
+              <p><strong><span class="kbd">Esc</span> の解除順：</strong> ポップアップ → 選択中の強調 → 展開中の行 → 全画面。重なっている場合は必要な回数だけ押してください。</p>
+            </div>
+          </section>
+
+          <section id="input">
+            <p class="section-kicker mono">09 / DATA HYGIENE</p>
+            <h2>GitLab側の情報を整える</h2>
+            <p class="section-lead">
+              ダッシュボードの見え方は、GitLabのイシューとマイルストーンの入力内容で決まります。表示がおかしいときは、まず元データを確認します。
+            </p>
+
+            <table>
+              <thead><tr><th>GitLabで設定する項目</th><th>ダッシュボードでの使われ方</th><th>運用の目安</th></tr></thead>
+              <tbody>
+                <tr><td>イシューのタイトル</td><td>一覧、カレンダー、ロードマップの表示名</td><td>作業内容が一目で分かる短い名称</td></tr>
+                <tr><td>担当者</td><td>担当者フィルタ、分布、詳細表示</td><td>着手前に割り当てる</td></tr>
+                <tr><td>ラベル</td><td>ラベルフィルタ、分布、代表ラベル、チェックポイント</td><td>チーム内の分類を揃える</td></tr>
+                <tr><td>期限（due date）</td><td>予定線、遅延判定、未完了tick</td><td>遅れを見たい作業には必ず設定</td></tr>
+                <tr><td>マイルストーン</td><td>フィルタ、所属関係、ロードマップ</td><td>目標単位で紐づける</td></tr>
+                <tr><td>マイルストーンの開始日・期限</td><td>カレンダー／ロードマップの期間バー</td><td>両方を設定すると最も読みやすい</td></tr>
+                <tr><td>イシューのClose</td><td>完了日、Close日数、納期遵守率</td><td>完了した日にCloseする</td></tr>
+              </tbody>
+            </table>
+
+            <details>
+              <summary>複数ラベルがあるイシューの扱い</summary>
+              <div>
+                <p>絞り込みとチェックポイント判定は全ラベルを見ます。一覧のラベルチップと「ラベル別」分布では、GitLabが返す配列の先頭ラベルを代表として表示します。</p>
+              </div>
+            </details>
+            <details>
+              <summary>開始日がないイシューの扱い</summary>
+              <div>
+                <p>カレンダーでは、イシューの開始日に <code>created_at</code> を使います。終了は、完了済みなら <code>closed_at</code>、未完了で期限があれば <code>due_date</code>、期限もなければ今日です。</p>
+              </div>
+            </details>
+            <details>
+              <summary>チェックポイントにする方法</summary>
+              <div>
+                <p>既定では <code>checkpoint</code> ラベルを付けたイシューが★になります。ラベル名を変える場合は、起動環境の <code>CHECKPOINT_LABEL</code> を変更します。</p>
+              </div>
+            </details>
+          </section>
+
+          <section id="trouble">
+            <p class="section-kicker mono">10 / TROUBLESHOOTING</p>
+            <h2>困ったとき</h2>
+            <p class="section-lead">よくある症状から、最初に確認する場所をまとめています。</p>
+
+            <details open>
+              <summary>「データを取得できませんでした」と表示される</summary>
+              <div>
+                <ol>
+                  <li><code>.env.local</code> の <code>GITLAB_BASE_URL</code>、<code>GITLAB_PROJECT_ID</code>、<code>GITLAB_TOKEN</code> を確認します。</li>
+                  <li>トークンに <code>read_api</code> スコープがあるか確認します。</li>
+                  <li>GitLabのURLへサーバーから接続できるか、トークンの期限が切れていないか確認します。</li>
+                </ol>
+              </div>
+            </details>
+            <details>
+              <summary>GitLabで変更したのに画面へ反映されない</summary>
+              <div>
+                <p>自動更新とサーバーキャッシュはともに60秒です。1分ほど待ち、ブラウザのタブを一度切り替えて戻るか、ページを再読み込みします。</p>
+              </div>
+            </details>
+            <details>
+              <summary>探しているイシューが表示されない</summary>
+              <div>
+                <p>状態、ラベル、担当者、マイルストーンの選択数を確認し、それぞれのポップアップから「選択をクリア」します。カレンダーでは表示期間と非表示曜日も確認してください。</p>
+              </div>
+            </details>
+            <details>
+              <summary>カレンダーに遅延の斜線が出ない</summary>
+              <div>
+                <p>遅延判定にはイシューの期限が必要です。GitLabで due date を設定してください。期限のない未完了イシューは、今日までのバーは表示されますが遅延とは判定されません。</p>
+              </div>
+            </details>
+            <details>
+              <summary>ロードマップにマイルストーンが出ない／バーがない</summary>
+              <div>
+                <p>マイルストーンフィルタを解除し、GitLab側で開始日・期限を設定します。イシューが0件でも取得済みマイルストーンは選択できますが、日程がなければ時間軸バーは描けません。</p>
+              </div>
+            </details>
+            <details>
+              <summary>設定やDockerでの起動方法も知りたい</summary>
+              <div>
+                <p>環境変数の全一覧、Docker、アーキテクチャ、テスト方法は <a href="../README.md">README</a> を参照してください。</p>
+              </div>
+            </details>
+          </section>
+        </div>
+
+        <footer>
+          <p>GitLab イシュー分析ダッシュボード 操作マニュアル · v1.2.0 · このページはブラウザの印刷機能からPDFとして保存できます。</p>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
