@@ -9,7 +9,7 @@
     <title>操作マニュアル｜GitLab イシュー分析ダッシュボード</title>
     <meta
       name="description"
-      content="GitLab イシュー分析ダッシュボードの起動、絞り込み、4つのビュー、会議での使い方を画面付きで説明する操作マニュアル。"
+      content="GitLab イシュー分析ダッシュボードの起動、絞り込み、5つのビュー、会議での使い方を画面付きで説明する操作マニュアル。"
     />
     <style>
       :root {
@@ -814,7 +814,7 @@
     <div class="layout">
       <aside class="sidebar" aria-label="マニュアル目次">
         <div class="product-mark">GitLab Issue Dashboard</div>
-        <p class="meta">USER MANUAL · v1.2.0<br />更新日 2026-07-17</p>
+        <p class="meta">USER MANUAL · v1.3.0<br />更新日 2026-07-21</p>
         <p class="toc-title">Contents</p>
         <nav class="toc">
           <a href="#start">01 はじめる</a>
@@ -824,9 +824,10 @@
           <a href="#distribution">05 傾向を比べる</a>
           <a href="#calendar">06 遅れを確認する</a>
           <a href="#roadmap">07 目標を追う</a>
-          <a href="#meeting">08 会議で使う</a>
-          <a href="#input">09 GitLab側の整え方</a>
-          <a href="#trouble">10 困ったとき</a>
+          <a href="#team">08 担当を見渡す</a>
+          <a href="#meeting">09 会議で使う</a>
+          <a href="#input">10 GitLab側の整え方</a>
+          <a href="#trouble">11 困ったとき</a>
         </nav>
         <div class="sidebar-note">
           このダッシュボードは閲覧専用です。タイトル、担当者、期限、ラベル、マイルストーンの編集は GitLab で行います。
@@ -838,10 +839,10 @@
           <p class="eyebrow">Field guide / 操作マニュアル</p>
           <h1>「遅れてる？」を、<br />迷わず確かめる。</h1>
           <p class="hero-lead">
-            起動から絞り込み、4つのビューの使い分け、会議での見せ方まで。日々よく使う操作を画面付きで説明します。
+            起動から絞り込み、5つのビューの使い分け、会議での見せ方まで。日々よく使う操作を画面付きで説明します。
           </p>
           <div class="hero-meta mono">
-            <span>対象バージョン 1.2.0</span>
+            <span>対象バージョン 1.3.0</span>
             <span>既定URL http://localhost:48273</span>
             <span>データ更新 60秒ごと</span>
           </div>
@@ -859,9 +860,9 @@
               <article class="quick-card">
                 <span class="meta">TRY WITH SAMPLE DATA</span>
                 <h3>サンプルデータで試す</h3>
-                <p>4つのビューと遅延表示をすぐ確認できます。</p>
+                <p>5つのビューと遅延表示をすぐ確認できます。</p>
                 <pre class="command"><code>npm install
-MOCK_GITLAB=1 npm run dev</code></pre>
+npm run dev:mock</code></pre>
               </article>
               <article class="quick-card">
                 <span class="meta">USE YOUR GITLAB DATA</span>
@@ -885,14 +886,14 @@ npm run dev</code></pre>
 
           <section id="screen">
             <p class="section-kicker mono">02 / ORIENTATION</p>
-            <h2>4つのビュー</h2>
+            <h2>5つのビュー</h2>
             <p class="section-lead">
-              上部の4つのボタンが入口です。迷ったら、知りたいことに合わせて選びます。
+              上部の5つのボタンが入口です。迷ったら、知りたいことに合わせて選びます。
             </p>
 
             <figure class="screen">
               <img src="overview.gif" alt="イシュー一覧、Close日数の分布、カレンダー、ロードマップを切り替える操作" width="1400" height="763" />
-              <figcaption>画面上部の「表示」から4ビューを切り替えます。</figcaption>
+              <figcaption>画面上部の「表示」からビューを切り替えます。</figcaption>
             </figure>
 
             <div class="card-grid">
@@ -911,6 +912,10 @@ npm run dev</code></pre>
               <article class="card">
                 <h3>ロードマップ</h3>
                 <p><strong>マイルストーンが期限までに終わりそうか</strong>を確認。目標単位の進捗共有に使います。</p>
+              </article>
+              <article class="card">
+                <h3>担当者</h3>
+                <p><strong>誰が何を担当し、どこに期限リスクがあるか</strong>を確認。朝会や進捗会議の俯瞰に使います。</p>
               </article>
             </div>
           </section>
@@ -1093,11 +1098,26 @@ npm run dev</code></pre>
             </div>
           </section>
 
+          <section id="team">
+            <p class="section-kicker mono">08 / OWNERS</p>
+            <h2>担当と期限リスクを見渡す</h2>
+            <p class="section-lead">
+              担当者ビューは、進行中の仕事を担当者ごとにまとめます。期限超過と7日以内の期限を優先し、チーム全体の負荷とリスクを一画面で確認できます。
+            </p>
+
+            <ol class="steps">
+              <li><strong>「担当者」を開きます。</strong> 上部で進行中、期限超過、7日以内、稼働メンバー数を確認します。</li>
+              <li><strong>期限超過がある担当者から見ます。</strong> カード内の作業は期限リスク順に上位3件が表示されます。</li>
+              <li><strong>ラベル、担当者、マイルストーンで絞ります。</strong> 特定チームや目標だけの担当状況を共有できます。</li>
+              <li><strong>会議では「全画面」を押します。</strong> ブラウザの外枠と他の指標を隠し、担当状況に集中できます。</li>
+            </ol>
+          </section>
+
           <section id="meeting">
-            <p class="section-kicker mono">08 / PRESENT</p>
+            <p class="section-kicker mono">09 / PRESENT</p>
             <h2>会議用の全画面表示</h2>
             <p class="section-lead">
-              カレンダーとロードマップには全画面モードがあります。ヘッダーやほかの指標を隠し、フィルタと現在のビューだけを画面いっぱいに表示します。
+              カレンダー、ロードマップ、担当者には全画面モードがあります。ヘッダーやほかの指標を隠し、フィルタと現在のビューだけを画面いっぱいに表示します。
             </p>
 
             <figure class="screen">
@@ -1109,9 +1129,9 @@ npm run dev</code></pre>
               <article class="recipe" data-label="DAILY / 3 MIN">
                 <h3>朝会で詰まりを確認</h3>
                 <ol>
-                  <li>イシュー一覧</li>
-                  <li>Open → 長引き順</li>
-                  <li>上位3件の次アクションを確認</li>
+                  <li>担当者</li>
+                  <li>期限超過 → 7日以内の順に確認</li>
+                  <li>担当者ごとに次アクションを確認</li>
                 </ol>
               </article>
               <article class="recipe" data-label="WEEKLY / 5 MIN">
@@ -1119,7 +1139,7 @@ npm run dev</code></pre>
                 <ol>
                   <li>カレンダー → 2週</li>
                   <li>期限超過（進行中）を確認</li>
-                  <li>全画面で担当者・予定を共有</li>
+                  <li>全画面で予定と遅れを共有</li>
                 </ol>
               </article>
               <article class="recipe" data-label="REVIEW / 10 MIN">
@@ -1146,7 +1166,7 @@ npm run dev</code></pre>
           </section>
 
           <section id="input">
-            <p class="section-kicker mono">09 / DATA HYGIENE</p>
+            <p class="section-kicker mono">10 / DATA HYGIENE</p>
             <h2>GitLab側の情報を整える</h2>
             <p class="section-lead">
               ダッシュボードの見え方は、GitLabのイシューとマイルストーンの入力内容で決まります。表示がおかしいときは、まず元データを確認します。
@@ -1155,8 +1175,8 @@ npm run dev</code></pre>
             <table>
               <thead><tr><th>GitLabで設定する項目</th><th>ダッシュボードでの使われ方</th><th>運用の目安</th></tr></thead>
               <tbody>
-                <tr><td>イシューのタイトル</td><td>一覧、カレンダー、ロードマップの表示名</td><td>作業内容が一目で分かる短い名称</td></tr>
-                <tr><td>担当者</td><td>担当者フィルタ、分布、詳細表示</td><td>着手前に割り当てる</td></tr>
+                <tr><td>イシューのタイトル</td><td>一覧、カレンダー、ロードマップ、担当者の表示名</td><td>作業内容が一目で分かる短い名称</td></tr>
+                <tr><td>担当者</td><td>担当者フィルタ、分布、担当者ビュー、詳細表示</td><td>着手前に割り当てる</td></tr>
                 <tr><td>ラベル</td><td>ラベルフィルタ、分布、代表ラベル、チェックポイント</td><td>チーム内の分類を揃える</td></tr>
                 <tr><td>期限（due date）</td><td>予定線、遅延判定、未完了tick</td><td>遅れを見たい作業には必ず設定</td></tr>
                 <tr><td>マイルストーン</td><td>フィルタ、所属関係、ロードマップ</td><td>目標単位で紐づける</td></tr>
@@ -1186,7 +1206,7 @@ npm run dev</code></pre>
           </section>
 
           <section id="trouble">
-            <p class="section-kicker mono">10 / TROUBLESHOOTING</p>
+            <p class="section-kicker mono">11 / TROUBLESHOOTING</p>
             <h2>困ったとき</h2>
             <p class="section-lead">よくある症状から、最初に確認する場所をまとめています。</p>
 
@@ -1234,7 +1254,7 @@ npm run dev</code></pre>
         </div>
 
         <footer>
-          <p>GitLab イシュー分析ダッシュボード 操作マニュアル · v1.2.0 · このページはブラウザの印刷機能からPDFとして保存できます。</p>
+          <p>GitLab イシュー分析ダッシュボード 操作マニュアル · v1.3.0 · このページはブラウザの印刷機能からPDFとして保存できます。</p>
         </footer>
       </main>
     </div>

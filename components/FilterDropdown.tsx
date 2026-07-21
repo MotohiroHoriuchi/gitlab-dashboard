@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { MONO, SANS, SH_2, T, rgb, rgba, type FilterOption } from "@/lib/logic";
 
 /** Compact, searchable multi-select filter. Scales to many labels/assignees
@@ -10,17 +10,20 @@ export default function FilterDropdown({
   options,
   selectedCount,
   onClear,
+  presentation = false,
 }: {
   title: string;
   options: FilterOption[];
   selectedCount: number;
   onClear: () => void;
+  presentation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [flip, setFlip] = useState({ right: false, up: false });
   const ref = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const popupId = useId();
 
   // close on outside click
   useEffect(() => {
@@ -57,10 +60,10 @@ export default function FilterDropdown({
     display: "inline-flex",
     alignItems: "center",
     gap: "7px",
-    padding: "7px 12px",
+    padding: presentation ? "9px 14px" : "7px 12px",
     borderRadius: "8px",
     cursor: "pointer",
-    fontSize: "12.5px",
+    fontSize: presentation ? "16px" : "12.5px",
     fontWeight: 600,
     fontFamily: SANS,
     transition: "all .15s",
@@ -72,13 +75,13 @@ export default function FilterDropdown({
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minWidth: "16px",
-    height: "16px",
+    minWidth: presentation ? "22px" : "16px",
+    height: presentation ? "22px" : "16px",
     padding: "0 4px",
     borderRadius: "8px",
     background: rgb(T.primary),
     color: rgb(T.onPrimary),
-    fontSize: "10px",
+    fontSize: presentation ? "13px" : "10px",
     fontWeight: 700,
     fontFamily: MONO,
   };
@@ -87,7 +90,7 @@ export default function FilterDropdown({
     ...(flip.up ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
     ...(flip.right ? { right: 0 } : { left: 0 }),
     zIndex: 50,
-    width: "268px",
+    width: presentation ? "320px" : "268px",
     background: rgb(T.canvasSoft),
     border: "1px solid " + rgb(T.hairline),
     borderRadius: "12px",
@@ -98,19 +101,27 @@ export default function FilterDropdown({
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button type="button" style={trigger} onClick={() => setOpen((o) => !o)}>
+      <button
+        type="button"
+        style={trigger}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={popupId}
+        aria-haspopup="true"
+      >
         <span>{title}</span>
         {active && <span style={badge}>{selectedCount}</span>}
         <span style={{ fontSize: "10px", opacity: 0.8 }}>▾</span>
       </button>
 
       {open && (
-        <div ref={popRef} style={pop}>
+        <div ref={popRef} id={popupId} style={pop} role="group" aria-label={`${title}の選択肢`}>
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`${title}を検索…`}
+            aria-label={`${title}を検索`}
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -120,7 +131,7 @@ export default function FilterDropdown({
               border: "1px solid " + rgb(T.hairline),
               background: rgb(T.card),
               color: rgb(T.ink),
-              fontSize: "12px",
+              fontSize: presentation ? "15px" : "12px",
               fontFamily: SANS,
               outline: "none",
             }}
@@ -136,6 +147,7 @@ export default function FilterDropdown({
                 type="button"
                 key={i}
                 onClick={o.onToggle}
+                aria-pressed={o.active}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -148,7 +160,7 @@ export default function FilterDropdown({
                   border: "none",
                   background: o.active ? rgba(T.primary, 0.12) : "transparent",
                   color: rgb(T.body),
-                  fontSize: "12.5px",
+                  fontSize: presentation ? "15px" : "12.5px",
                   fontFamily: SANS,
                 }}
               >

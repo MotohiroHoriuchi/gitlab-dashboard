@@ -78,32 +78,37 @@ export default function RoadmapView({
     };
   }, [chip, expanded, onExitFull]);
 
-  const COL = "268px minmax(0,1fr)"; // left KPI column + date-axis track
+  const COL = fullscreen
+    ? "clamp(360px, 22vw, 520px) minmax(0,1fr)"
+    : "268px minmax(0,1fr)"; // left KPI column + date-axis track
+  const wallControl = (style: CSSProperties): CSSProperties =>
+    fullscreen ? { ...style, padding: "10px 16px", fontSize: "16px" } : style;
 
   return (
     <section
       style={S(
-        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`,
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:${fullscreen ? "24px 28px 28px" : "18px 20px 20px"}; min-width:0;`,
       )}
     >
       {/* header */}
       <div style={S("display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px;")}>
-        <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>マイルストーンの進み具合</h2>
+        <h2 style={S(`margin:0; font-size:${fullscreen ? "28px" : "16px"}; font-weight:700; color:${rgb(T.ink)}; text-wrap:balance;`)}>マイルストーンの進み具合</h2>
         <div style={S("display:flex; align-items:center; gap:10px;")}>
-          <span style={S(`font-size:12.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>{roadmap.spanLabel}</span>
+          <span style={S(`font-size:${fullscreen ? "17px" : "12.5px"}; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums;`)}>{roadmap.spanLabel}</span>
           {onToggleFull && (
             <button
-              style={seg(!!fullscreen)}
+              type="button"
+              style={wallControl(seg(!!fullscreen))}
               onClick={onToggleFull}
               aria-pressed={!!fullscreen}
-              title={fullscreen ? "全画面を解除（Esc）" : "ツールバーとロードマップだけを全画面表示"}
+              title={fullscreen ? "会議表示を終了（Esc）" : "ロードマップを会議用に全画面表示"}
             >
-              {fullscreen ? "✕ 全画面解除" : "⛶ 全画面"}
+              {fullscreen ? "✕ 会議表示を終了" : "⛶ 会議表示"}
             </button>
           )}
         </div>
       </div>
-      <p style={S(`margin:0 0 12px; font-size:12.5px; color:${rgb(T.muted)}; line-height:1.5;`)}>
+      <p style={S(`margin:0 0 ${fullscreen ? "18px" : "12px"}; font-size:${fullscreen ? "16px" : "12.5px"}; color:${rgb(T.muted)}; line-height:1.5; text-wrap:pretty;`)}>
         バーは start→due（縦線が本日、濃い部分が経過）。tick は<b style={{ color: rgb(T.ink) }}>未完</b>イシューの締切（
         <span style={{ color: rgb(T.err) }}>■</span>超過 ·
         <span style={{ color: rgb(CHECKPOINT_STAR) }}> ★</span>チェックポイント）。左のスパークは残数（実線）と理想線（破線）。行クリックで詳細。
@@ -112,11 +117,11 @@ export default function RoadmapView({
       {/* month header aligned to the track column */}
       <div style={{ display: "grid", gridTemplateColumns: COL, gap: "0 14px", alignItems: "end", marginBottom: "2px" }}>
         <div />
-        <div style={{ position: "relative", height: "18px" }}>
+        <div style={{ position: "relative", height: fullscreen ? "28px" : "18px" }}>
           {roadmap.gridLines.map((g, i) => (
-            <span key={i} style={monthLabelStyle(g.x)}>{g.label}</span>
+            <span key={i} style={monthLabelStyle(g.x, fullscreen)}>{g.label}</span>
           ))}
-          {roadmap.todayX !== null && <span style={todayLabelStyle(roadmap.todayX)}>本日</span>}
+          {roadmap.todayX !== null && <span style={todayLabelStyle(roadmap.todayX, fullscreen)}>本日</span>}
         </div>
       </div>
 
@@ -128,22 +133,32 @@ export default function RoadmapView({
         roadmap.rows.map((row) => (
           <div key={row.key}>
             <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded === row.key}
+              aria-controls={`roadmap-detail-${row.id}`}
               onClick={() => setExpanded((p) => (p === row.key ? null : row.key))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setExpanded((p) => (p === row.key ? null : row.key));
+                }
+              }}
               style={{
                 display: "grid",
                 gridTemplateColumns: COL,
                 gap: "0 14px",
                 alignItems: "center",
-                padding: "10px 0",
+                padding: fullscreen ? "16px 0" : "10px 0",
                 borderBottom: "1px solid " + rgb(T.hairline),
                 cursor: "pointer",
                 background: expanded === row.key ? rgba(MILESTONE_COLOR, 0.06) : "transparent",
-                transition: "background .15s",
               }}
             >
-              <KpiColumn row={row} onTip={showTip} onTipEnd={hideTip} />
+              <KpiColumn row={row} fullscreen={fullscreen} onTip={showTip} onTipEnd={hideTip} />
               <Track
                 row={row}
+                fullscreen={fullscreen}
                 todayX={roadmap.todayX}
                 weekStepPct={roadmap.weekStepPct}
                 gridLines={roadmap.gridLines}
@@ -155,7 +170,7 @@ export default function RoadmapView({
                 onTipEnd={hideTip}
               />
             </div>
-            {expanded === row.key && <Expanded row={row} />}
+            {expanded === row.key && <Expanded row={row} id={`roadmap-detail-${row.id}`} />}
           </div>
         ))
       )}
@@ -169,20 +184,22 @@ export default function RoadmapView({
 /* ── left column: title + health + progress + KPIs + mini burndown ── */
 function KpiColumn({
   row,
+  fullscreen,
   onTip,
   onTipEnd,
 }: {
   row: RoadmapRow;
+  fullscreen?: boolean;
   onTip: (e: React.MouseEvent, tip: CalTip) => void;
   onTipEnd: () => void;
 }) {
   const tone = toneColor(row.healthTone);
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-        <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: fullscreen ? "10px" : "6px" }}>
+        <span style={{ width: fullscreen ? "13px" : "8px", height: fullscreen ? "13px" : "8px", borderRadius: "50%", background: rgb(tone), flex: "0 0 auto" }} />
         <span
-          style={{ minWidth: 0, fontSize: "15px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          style={{ minWidth: 0, fontSize: fullscreen ? "22px" : "15px", fontWeight: 700, color: rgb(T.ink), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           onMouseEnter={(e) => onTip(e, row.tip)}
           onMouseMove={(e) => onTip(e, row.tip)}
           onMouseLeave={onTipEnd}
@@ -190,13 +207,13 @@ function KpiColumn({
           {row.title}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px" }}>
-        <div style={{ position: "relative", flex: "1 1 auto", height: "6px", borderRadius: "3px", background: rgba(T.hairline, 0.8), overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: fullscreen ? "12px" : "8px", marginTop: fullscreen ? "9px" : "5px" }}>
+        <div style={{ position: "relative", flex: "1 1 auto", height: fullscreen ? "10px" : "6px", borderRadius: "5px", background: rgba(T.hairline, 0.8), overflow: "hidden" }}>
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: row.pct + "%", background: rgb(tone), borderRadius: "3px" }} />
         </div>
-        <span style={{ fontSize: "13.5px", fontWeight: 700, color: rgb(tone), fontFamily: MONO, flex: "0 0 auto" }}>{row.pct}%</span>
+        <span style={{ fontSize: fullscreen ? "20px" : "13.5px", fontWeight: 700, color: rgb(tone), fontFamily: MONO, flex: "0 0 auto", fontVariantNumeric: "tabular-nums" }}>{row.pct}%</span>
       </div>
-      <div style={{ marginTop: "4px", fontSize: "12.5px", color: rgb(T.muted), fontFamily: MONO }}>
+      <div style={{ marginTop: fullscreen ? "7px" : "4px", fontSize: fullscreen ? "17px" : "12.5px", color: rgb(T.muted), fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
         {row.hasSchedule || row.total > 0 ? `完了 ${row.done}/${row.total}` : "日程未設定"}
         {row.remaining > 0 && ` · 残${row.remaining}`}
         {row.overdue > 0 && <span style={{ color: rgb(T.warn), fontWeight: 700 }}> · 超過{row.overdue}</span>}
@@ -205,7 +222,14 @@ function KpiColumn({
         )}
       </div>
       {row.spark.hasData && (
-        <svg width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} style={{ marginTop: "5px", display: "block" }}>
+        <svg
+          width={fullscreen ? 180 : SPARK_W}
+          height={fullscreen ? 48 : SPARK_H}
+          viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+          aria-label="残作業の推移。実線が実績、破線が理想"
+          role="img"
+          style={{ marginTop: fullscreen ? "8px" : "5px", display: "block" }}
+        >
           <polyline points={row.spark.ideal} fill="none" stroke={rgba(T.mutedSoft, 0.7)} strokeWidth="1" strokeDasharray="3 2" />
           <polyline points={row.spark.actual} fill="none" stroke={rgb(toneColor(row.healthTone))} strokeWidth="1.5" />
         </svg>
@@ -217,6 +241,7 @@ function KpiColumn({
 /* ── date-axis track: gridlines, today, bar (today-split), due marker, ticks ── */
 function Track({
   row,
+  fullscreen,
   todayX,
   weekStepPct,
   gridLines,
@@ -225,6 +250,7 @@ function Track({
   onTipEnd,
 }: {
   row: RoadmapRow;
+  fullscreen?: boolean;
   todayX: number | null;
   weekStepPct: number;
   gridLines: RoadmapVals["gridLines"];
@@ -234,7 +260,7 @@ function Track({
 }) {
   const trackStyle: CSSProperties = {
     position: "relative",
-    height: "56px",
+    height: fullscreen ? "86px" : "56px",
     borderRadius: "6px",
     overflow: "hidden", // clamp any child that rounds past the edge
     backgroundImage: `repeating-linear-gradient(90deg, ${rgba(T.ink, 0.05)} 0 1px, transparent 1px ${weekStepPct}%)`,
@@ -244,14 +270,14 @@ function Track({
       {gridLines.map((g, i) => (
         <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.x + "%", width: "1px", background: rgba(T.ink, 0.12) }} />
       ))}
-      {todayX !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX + "%", width: "2px", background: rgba(T.primary, 0.9), zIndex: 2 }} />}
+      {todayX !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX + "%", width: fullscreen ? "3px" : "2px", background: rgba(T.primary, 0.9), zIndex: 2 }} />}
 
       {row.bar && (
         <div
           style={{
             position: "absolute",
-            top: "7px",
-            height: "22px",
+            top: fullscreen ? "10px" : "7px",
+            height: fullscreen ? "34px" : "22px",
             left: row.bar.left + "%",
             width: row.bar.width + "%",
             borderRadius: "5px",
@@ -265,7 +291,7 @@ function Track({
       )}
       {row.dueX !== null && (
         <div
-          style={{ position: "absolute", top: "4px", height: "28px", left: row.dueX + "%", width: "0", borderLeft: "2px dotted " + rgba(T.ink, 0.7) }}
+          style={{ position: "absolute", top: fullscreen ? "6px" : "4px", height: fullscreen ? "44px" : "28px", left: row.dueX + "%", width: "0", borderLeft: (fullscreen ? "3px" : "2px") + " dotted " + rgba(T.ink, 0.7) }}
           onMouseEnter={(e) => onTip(e, row.tip)}
           onMouseMove={(e) => onTip(e, row.tip)}
           onMouseLeave={onTipEnd}
@@ -281,41 +307,42 @@ function Track({
           onMouseMove={(e) => onTip(e, t.tip)}
           onMouseLeave={onTipEnd}
         >
-          <div style={tickLabelStyle(t.x)}>
+          <div style={tickLabelStyle(t.x, fullscreen)}>
             {t.isCheckpoint && <span style={{ color: rgb(CHECKPOINT_STAR) }}>★</span>} #{t.id}
           </div>
-          <div style={{ position: "absolute", left: 0, bottom: "-2px", transform: "translateX(-50%)", width: t.isCheckpoint ? "0" : "2px", height: "10px", background: t.isCheckpoint ? "transparent" : rgb(t.color) }}>
-            {t.isCheckpoint && <span style={{ position: "absolute", left: "-4px", bottom: 0, fontSize: "11px", color: rgb(CHECKPOINT_STAR) }}>★</span>}
+          <div style={{ position: "absolute", left: 0, bottom: "-2px", transform: "translateX(-50%)", width: t.isCheckpoint ? "0" : fullscreen ? "3px" : "2px", height: fullscreen ? "16px" : "10px", background: t.isCheckpoint ? "transparent" : rgb(t.color) }}>
+            {t.isCheckpoint && <span style={{ position: "absolute", left: fullscreen ? "-7px" : "-4px", bottom: 0, fontSize: fullscreen ? "18px" : "11px", color: rgb(CHECKPOINT_STAR) }}>★</span>}
           </div>
         </div>
       ))}
 
       {/* collapsed bulk of safe-future open issues */}
       {row.moreChip && (
-        <div
+        <button
+          type="button"
           data-rm-chip
           onClick={(e) => {
             e.stopPropagation();
             onChip({ refs: row.moreChip!.refs, x: e.clientX + 10, y: e.clientY + 10 });
           }}
-          style={{ ...moreChipStyle(row.moreChip.x), zIndex: 3 }}
+          style={{ ...moreChipStyle(row.moreChip.x, fullscreen), zIndex: 3 }}
           onMouseEnter={(e) => onTip(e, row.moreChip!.tip)}
           onMouseMove={(e) => onTip(e, row.moreChip!.tip)}
           onMouseLeave={onTipEnd}
         >
           {row.moreChip.label}
-        </div>
+        </button>
       )}
     </div>
   );
 }
 
 /* ── inline expansion: large burndown + remaining-work buckets ── */
-function Expanded({ row }: { row: RoadmapRow }) {
+function Expanded({ row, id }: { row: RoadmapRow; id: string }) {
   const b = row.burndown;
   const tone = toneColor(row.healthTone);
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", padding: "14px 4px 18px", borderBottom: "1px solid " + rgb(T.hairline) }}>
+    <div id={id} style={{ display: "flex", flexWrap: "wrap", gap: "18px", padding: "14px 4px 18px", borderBottom: "1px solid " + rgb(T.hairline) }}>
       <div style={{ flex: "1 1 380px", minWidth: 0 }}>
         <div style={{ fontSize: "13.5px", fontWeight: 700, color: rgb(T.body), marginBottom: "6px" }}>
           バーンダウン
@@ -422,28 +449,28 @@ function edgeAnchor(x: number): { left: string; transform: string; textAlign: CS
   if (x >= 94) return { left: "100%", transform: "translateX(-100%)", textAlign: "right" };
   return { left: x + "%", transform: "translateX(-50%)", textAlign: "center" };
 }
-function monthLabelStyle(x: number): CSSProperties {
+function monthLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "12.5px", fontWeight: 600, color: rgb(T.muted), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.muted), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 }
-function todayLabelStyle(x: number): CSSProperties {
+function todayLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: "12.5px", fontWeight: 700, color: rgb(T.primary), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.primary), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 }
-function tickLabelStyle(x: number): CSSProperties {
+function tickLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: "12px", left: 0, transform: a.transform, fontSize: "11px", fontWeight: 500, color: rgb(T.body), fontFamily: MONO, whiteSpace: "nowrap" };
+  return { position: "absolute", bottom: fullscreen ? "20px" : "12px", left: 0, transform: a.transform, fontSize: fullscreen ? "15px" : "11px", fontWeight: 700, color: rgb(T.body), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 }
-function moreChipStyle(x: number): CSSProperties {
+function moreChipStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
   return {
     position: "absolute",
-    bottom: "4px",
+    bottom: fullscreen ? "7px" : "4px",
     left: a.left,
     transform: a.transform,
-    padding: "2px 6px",
+    padding: fullscreen ? "5px 10px" : "2px 6px",
     borderRadius: "4px",
-    fontSize: "11px",
+    fontSize: fullscreen ? "15px" : "11px",
     fontWeight: 700,
     fontFamily: SANS,
     color: rgb(T.body),

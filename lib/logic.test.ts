@@ -4,6 +4,7 @@ import {
   buildCalendar,
   buildMilestoneCalendar,
   buildRelationIndex,
+  buildTeamOverview,
   calBarKey,
   chipSelectionRole,
   colOf,
@@ -240,6 +241,35 @@ describe("scheduleSummary", () => {
     const s = scheduleSummary([mkIssue({ isOpen: true, dueDate: null })], TODAY);
     expect(s.adherenceRate).toBeNull();
     expect(s.avgLateDays).toBeNull();
+  });
+});
+
+describe("buildTeamOverview", () => {
+  it("groups open work by owner and puts overdue work first", () => {
+    const overview = buildTeamOverview(
+      [
+        mkIssue({ id: 1, title: "通常", assignee: "佐藤", dueDate: "2026-07-20" }),
+        mkIssue({ id: 2, title: "超過", assignee: "佐藤", dueDate: "2026-06-29" }),
+        mkIssue({ id: 3, title: "近日", assignee: "鈴木", dueDate: "2026-07-05" }),
+        mkIssue({ id: 4, title: "完了", assignee: "鈴木", isOpen: false, closedAt: "2026-06-30" }),
+      ],
+      TODAY,
+    );
+
+    expect(overview.open).toBe(3);
+    expect(overview.overdue).toBe(1);
+    expect(overview.dueSoon).toBe(1);
+    expect(overview.members.map((m) => m.name)).toEqual(["佐藤", "鈴木"]);
+    expect(overview.members[0].focus[0]).toMatchObject({ id: 2, risk: "overdue", dueLabel: "2日超過" });
+  });
+
+  it("caps each owner's glance list at three items", () => {
+    const issues = Array.from({ length: 5 }, (_, i) =>
+      mkIssue({ id: i + 1, assignee: "担当", title: `作業${i + 1}` }),
+    );
+    const overview = buildTeamOverview(issues, TODAY);
+    expect(overview.members[0].open).toBe(5);
+    expect(overview.members[0].focus).toHaveLength(3);
   });
 });
 

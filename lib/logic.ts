@@ -360,6 +360,31 @@ export interface CalVals {
   relations: CalRelIndex; // click-focus lookup: selected bar key -> related bar keys
 }
 
+/** Owner-first team view model. Schedule views remain the source of exact
+ * dates; this answers the separate question: "who owns what, and where is the
+ * risk?" */
+export interface TeamFocusItem {
+  id: number;
+  title: string;
+  milestone: string;
+  dueLabel: string;
+  risk: "overdue" | "soon" | "normal";
+  isCheckpoint: boolean;
+}
+export interface TeamMemberOverview {
+  name: string;
+  open: number;
+  overdue: number;
+  dueSoon: number;
+  focus: TeamFocusItem[];
+}
+export interface TeamOverview {
+  members: TeamMemberOverview[];
+  open: number;
+  overdue: number;
+  dueSoon: number;
+}
+
 export interface Vals {
   repo: string;
   project: string;
@@ -380,9 +405,11 @@ export interface Vals {
   showDist: boolean;
   showCal: boolean;
   showRoadmap: boolean;
-  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn; roadmap: Btn };
+  showTeam: boolean;
+  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn; roadmap: Btn; team: Btn };
   calendar: CalVals;
   roadmap: RoadmapVals;
+  team: TeamOverview;
   labelOptions: FilterOption[];
   assigneeOptions: FilterOption[];
   milestoneOptions: FilterOption[];
@@ -472,6 +499,7 @@ export function renderVals(
   const showDist = st.panel === "dist";
   const showCal = st.panel === "calendar";
   const showRoadmap = st.panel === "roadmap";
+  const showTeam = st.panel === "team";
   const todayIndex = dayIndex(meta.asOf);
   const setS = (p: Partial<DashState>) => () => patch(p);
 
@@ -506,6 +534,7 @@ export function renderVals(
     todayIndex,
     meta.checkpointLabel,
   );
+  const team = buildTeamOverview(data.filter(passScope), todayIndex);
   const openArr = filtered.filter((i) => i.isOpen);
   const closedArr = filtered.filter((i) => !i.isOpen);
   const closedDur = closedArr.map((i) => i.linger).sort((a, b) => a - b);
@@ -959,14 +988,17 @@ export function renderVals(
     showDist,
     showCal,
     showRoadmap,
+    showTeam,
     panelTabs: {
       ranking: { style: seg(st.panel === "ranking"), onClick: setS({ panel: "ranking" }) },
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
       calendar: { style: seg(st.panel === "calendar"), onClick: setS({ panel: "calendar" }) },
       roadmap: { style: seg(st.panel === "roadmap"), onClick: setS({ panel: "roadmap" }) },
+      team: { style: seg(st.panel === "team"), onClick: setS({ panel: "team" }) },
     },
     calendar,
     roadmap,
+    team,
     labelOptions,
     assigneeOptions,
     milestoneOptions,
@@ -998,7 +1030,6 @@ const MAX_LANES = 3;
 /** Calendar bar/lane geometry (px) — sized so a TS_SM label fits in the bar. */
 const BAR_H = 22;
 const LANE_H = BAR_H + 3; // grid row height; rowGap adds the rest of the pitch
-const DUETICK_H = BAR_H + 2; // the plan tick pokes past the bar edges
 const JP_WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
 
 interface CalItem {
@@ -1120,19 +1151,24 @@ function toDayItem(it: CalItem, hidden: boolean): CalDayItem {
 }
 
 /** Style for a per-day "+N 件" overflow chip (single column, overflow row). */
-function overflowStyle(colStart: number, gridRowStart: number): CSSProperties {
+function overflowStyle(
+  colStart: number,
+  gridRowStart: number,
+  barHeight = BAR_H,
+  fontSize = TS_SM,
+): CSSProperties {
   return {
     gridColumn: `${colStart + 1} / span 1`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: BAR_H + "px",
+    height: barHeight + "px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "0 4px",
     boxSizing: "border-box",
     borderRadius: "5px",
-    fontSize: TS_SM + "px",
+    fontSize: fontSize + "px",
     fontFamily: SANS,
     fontWeight: 700,
     lineHeight: 1,
@@ -1243,6 +1279,88 @@ export function scheduleSummary(issues: Issue[], todayIndex: number): ScheduleSu
     overdue,
     adherenceRate: closedWithDue ? Math.round((onTime / closedWithDue) * 100) : null,
     avgLateDays: late ? Math.round((lateSum / late) * 10) / 10 : null,
+  };
+}
+
+/** Open work grouped by assignee for the dedicated team view. Items are
+ * risk-sorted so a two-line glance shows overdue work before routine work. */
+export function buildTeamOverview(issues: Issue[], todayIndex: number): TeamOverview {
+  const open = issues.filter((it) => it.isOpen);
+  const grouped = new Map<string, Issue[]>();
+  for (const it of open) {
+    const name = it.assignee || "未割当";
+    const current = grouped.get(name);
+    if (current) current.push(it);
+    else grouped.set(name, [it]);
+  }
+
+  const classify = (it: Issue): TeamFocusItem["risk"] => {
+    if (!it.dueDate) return "normal";
+    const due = dayIndex(it.dueDate);
+    if (Number.isNaN(due)) return "normal";
+    if (due < todayIndex) return "overdue";
+    if (due <= todayIndex + 7) return "soon";
+    return "normal";
+  };
+  const dueIndex = (it: Issue): number => {
+    if (!it.dueDate) return Number.POSITIVE_INFINITY;
+    const due = dayIndex(it.dueDate);
+    return Number.isNaN(due) ? Number.POSITIVE_INFINITY : due;
+  };
+  const riskRank = (it: Issue): number => {
+    const risk = classify(it);
+    return risk === "overdue" ? 0 : it.isCheckpoint ? 1 : risk === "soon" ? 2 : 3;
+  };
+  const toFocus = (it: Issue): TeamFocusItem => {
+    const due = dueIndex(it);
+    const risk = classify(it);
+    const dueLabel =
+      due === Number.POSITIVE_INFINITY
+        ? "期限なし"
+        : risk === "overdue"
+          ? `${todayIndex - due}日超過`
+          : due === todayIndex
+            ? "本日期限"
+            : `${fmtMD(due)}期限`;
+    return {
+      id: it.id,
+      title: it.title,
+      milestone: it.milestone,
+      dueLabel,
+      risk,
+      isCheckpoint: it.isCheckpoint,
+    };
+  };
+
+  const members: TeamMemberOverview[] = [...grouped.entries()].map(([name, memberIssues]) => {
+    const ordered = memberIssues.slice().sort((a, b) => {
+      return (
+        riskRank(a) - riskRank(b) ||
+        dueIndex(a) - dueIndex(b) ||
+        b.linger - a.linger ||
+        a.id - b.id
+      );
+    });
+    const overdue = memberIssues.filter((it) => classify(it) === "overdue").length;
+    const dueSoon = memberIssues.filter((it) => classify(it) === "soon").length;
+    return {
+      name,
+      open: memberIssues.length,
+      overdue,
+      dueSoon,
+      focus: ordered.slice(0, 3).map(toFocus),
+    };
+  });
+
+  members.sort(
+    (a, b) =>
+      b.overdue - a.overdue || b.dueSoon - a.dueSoon || b.open - a.open || a.name.localeCompare(b.name),
+  );
+  return {
+    members,
+    open: open.length,
+    overdue: members.reduce((sum, m) => sum + m.overdue, 0),
+    dueSoon: members.reduce((sum, m) => sum + m.dueSoon, 0),
   };
 }
 
@@ -1390,6 +1508,8 @@ function barStyle(
   colStart: number,
   colSpan: number,
   gridRowStart: number,
+  barHeight = BAR_H,
+  fontSize = TS_SM,
 ): CSSProperties {
   const c = it.color;
   const rL = isStart ? "5px" : "1px";
@@ -1398,7 +1518,7 @@ function barStyle(
     gridColumn: `${colStart + 1} / span ${colSpan}`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: BAR_H + "px",
+    height: barHeight + "px",
     display: "flex",
     alignItems: "center",
     gap: "3px",
@@ -1406,7 +1526,7 @@ function barStyle(
     boxSizing: "border-box",
     overflow: "hidden",
     whiteSpace: "nowrap",
-    fontSize: TS_SM + "px",
+    fontSize: fontSize + "px",
     fontFamily: SANS,
     fontWeight: 600,
     lineHeight: 1,
@@ -1453,12 +1573,13 @@ function overrunStyle(
   colSpan: number,
   gridRowStart: number,
   roundRight: boolean,
+  barHeight = BAR_H,
 ): CSSProperties {
   return {
     gridColumn: `${colStart + 1} / span ${colSpan}`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: BAR_H + "px",
+    height: barHeight + "px",
     boxSizing: "border-box",
     borderRadius: roundRight ? "0 5px 5px 0" : "0",
     background:
@@ -1474,12 +1595,12 @@ function overrunStyle(
 }
 
 /** Thin "予定線" tick at the plan/actual boundary (right edge of the due day). */
-function dueTickStyle(colStart: number, gridRowStart: number): CSSProperties {
+function dueTickStyle(colStart: number, gridRowStart: number, barHeight = BAR_H): CSSProperties {
   return {
     gridColumn: `${colStart + 1} / span 1`,
     gridRow: String(gridRowStart),
     alignSelf: "center",
-    height: DUETICK_H + "px",
+    height: barHeight + 2 + "px",
     boxSizing: "border-box",
     borderRight: "2px solid " + rgb(T.ink),
     pointerEvents: "none",
@@ -1620,7 +1741,9 @@ export function buildCalendar(
   const laneScale = st.fullscreen ? 2 : 1;
   const maxLanes = (st.calMode === "twoweek" ? MAX_LANES * 2 : MAX_LANES) * laneScale;
 
-  const laneHeight = LANE_H;
+  const barHeight = st.fullscreen ? 32 : BAR_H;
+  const laneFontSize = st.fullscreen ? 16 : TS_SM;
+  const laneHeight = st.fullscreen ? barHeight + 5 : LANE_H;
 
   // ── per-week rows ──
   const weeksOut: CalWeek[] = [];
@@ -1707,7 +1830,16 @@ export function buildCalendar(
         colStart: cc.colStart,
         colSpan: cc.colSpan,
         gridRowStart,
-        style: barStyle(it, isStart, isEnd, cc.colStart, cc.colSpan, gridRowStart),
+        style: barStyle(
+          it,
+          isStart,
+          isEnd,
+          cc.colStart,
+          cc.colSpan,
+          gridRowStart,
+          barHeight,
+          laneFontSize,
+        ),
         isCheckpoint: it.track === "issue" && it.isCheckpoint,
         tip: buildTip(it),
       };
@@ -1745,7 +1877,7 @@ export function buildCalendar(
             colStart: oc.colStart,
             colSpan: oc.colSpan,
             gridRowStart,
-            style: overrunStyle(oc.colStart, oc.colSpan, gridRowStart, isEnd),
+            style: overrunStyle(oc.colStart, oc.colSpan, gridRowStart, isEnd, barHeight),
           });
         }
         // The plan tick snaps back to the last visible day <= due, so it keeps
@@ -1765,7 +1897,7 @@ export function buildCalendar(
             colStart: tCol,
             colSpan: 1,
             gridRowStart,
-            style: dueTickStyle(tCol, gridRowStart),
+            style: dueTickStyle(tCol, gridRowStart, barHeight),
           });
         }
       }
@@ -1804,7 +1936,7 @@ export function buildCalendar(
         colStart: colFor[c],
         colSpan: 1,
         gridRowStart: overflowRow,
-        style: overflowStyle(colFor[c], overflowRow),
+        style: overflowStyle(colFor[c], overflowRow, barHeight, laneFontSize),
         overflowLabel: `+${hidden} 件`,
         dayLabel: dayLabelOf(d),
         items,
@@ -1843,8 +1975,8 @@ export function buildCalendar(
         display: "grid",
         gridTemplateColumns: `repeat(${nCols},minmax(0,1fr))`,
         gridAutoRows: laneHeight + "px",
-        rowGap: "3px",
-        padding: "5px 0 7px",
+        rowGap: st.fullscreen ? "4px" : "3px",
+        padding: st.fullscreen ? "8px 0 10px" : "5px 0 7px",
         minHeight: laneHeight + "px",
         borderTop: "1px solid " + rgb(T.hairline),
         // vertical day-boundary hairlines through the whole lane area — the

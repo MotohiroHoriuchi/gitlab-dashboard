@@ -13,32 +13,41 @@ export default function FilterControls({
   showSort,
   showStatus = true,
   summary,
+  presentation = false,
 }: {
   v: Vals;
   st: DashState;
   showSort: boolean;
   showStatus?: boolean;
   summary?: string;
+  presentation?: boolean;
 }) {
+  const buttonStyle = (style: React.CSSProperties): React.CSSProperties =>
+    presentation ? { ...style, padding: "9px 15px", fontSize: "16px" } : style;
   return (
-    <div style={S(`display:flex; flex-wrap:wrap; align-items:center; gap:14px 20px; padding:13px 16px; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px;`)}>
+    <div
+      aria-label="表示内容の絞り込み"
+      style={S(
+        `display:flex; flex-wrap:wrap; align-items:center; gap:${presentation ? "16px 24px" : "14px 20px"}; padding:${presentation ? "15px 18px" : "13px 16px"}; background:${rgb(T.canvasSoft)}; border:1px solid ${rgb(T.hairline)}; border-radius:12px;`,
+      )}
+    >
       {showStatus && (
         <div style={S("display:flex; align-items:center; gap:9px;")}>
-          <span style={S(`font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.muted)}; font-weight:600;`)}>状態</span>
+          <span style={S(`font-size:${presentation ? "15px" : "11px"}; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:700;`)}>状態</span>
           <div style={S("display:flex; gap:6px;")}>
-            <button style={v.statusBtns.all.style} onClick={v.statusBtns.all.onClick}>すべて</button>
-            <button style={v.statusBtns.open.style} onClick={v.statusBtns.open.onClick}>Open</button>
-            <button style={v.statusBtns.closed.style} onClick={v.statusBtns.closed.onClick}>Closed</button>
+            <button type="button" style={buttonStyle(v.statusBtns.all.style)} onClick={v.statusBtns.all.onClick}>すべて</button>
+            <button type="button" style={buttonStyle(v.statusBtns.open.style)} onClick={v.statusBtns.open.onClick}>Open</button>
+            <button type="button" style={buttonStyle(v.statusBtns.closed.style)} onClick={v.statusBtns.closed.onClick}>Closed</button>
           </div>
         </div>
       )}
       {showSort && (
         <div style={S("display:flex; align-items:center; gap:9px;")}>
-          <span style={S(`font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.muted)}; font-weight:600;`)}>並べ替え</span>
+          <span style={S(`font-size:${presentation ? "15px" : "11px"}; text-transform:uppercase; color:${rgb(T.muted)}; font-weight:700;`)}>並べ替え</span>
           <div style={S("display:flex; gap:6px;")}>
-            <button style={v.sortBtns.linger.style} onClick={v.sortBtns.linger.onClick}>長引き順</button>
-            <button style={v.sortBtns.recent.style} onClick={v.sortBtns.recent.onClick}>新しい順</button>
-            <button style={v.sortBtns.oldest.style} onClick={v.sortBtns.oldest.onClick}>古い順</button>
+            <button type="button" style={buttonStyle(v.sortBtns.linger.style)} onClick={v.sortBtns.linger.onClick}>長引き順</button>
+            <button type="button" style={buttonStyle(v.sortBtns.recent.style)} onClick={v.sortBtns.recent.onClick}>新しい順</button>
+            <button type="button" style={buttonStyle(v.sortBtns.oldest.style)} onClick={v.sortBtns.oldest.onClick}>古い順</button>
           </div>
         </div>
       )}
@@ -47,20 +56,23 @@ export default function FilterControls({
         options={v.labelOptions}
         selectedCount={st.labels.length}
         onClear={v.clearBtn.onClick}
+        presentation={presentation}
       />
       <FilterDropdown
         title="担当者"
         options={v.assigneeOptions}
         selectedCount={st.assignees.length}
         onClear={v.clearAssigneeBtn.onClick}
+        presentation={presentation}
       />
       <FilterDropdown
         title="マイルストーン"
         options={v.milestoneOptions}
         selectedCount={st.milestones.length}
         onClear={v.clearMilestoneBtn.onClick}
+        presentation={presentation}
       />
-      <div style={S(`margin-left:auto; font-size:11.5px; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace;`)}>
+      <div style={S(`margin-left:auto; font-size:${presentation ? "15px" : "11.5px"}; color:${rgb(T.muted)}; font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums;`)}>
         {summary ?? `該当 ${v.filterSummary}`}
       </div>
     </div>

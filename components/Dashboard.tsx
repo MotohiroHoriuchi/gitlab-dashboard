@@ -17,11 +17,11 @@ import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
 import RoadmapView from "@/components/RoadmapView";
+import TeamView from "@/components/TeamView";
 
-/** Toolbar+view wrapper for the calendar/roadmap tabs. Always mounted (so the
- *  view's selection/popover state survives the toggle); in fullscreen it turns
- *  into a viewport-filling fixed overlay above the page (z 40, below the
- *  popover/tooltip layers at 60/70). */
+/** Toolbar+view wrapper for the calendar/roadmap/team tabs. In fullscreen it
+ * turns into a viewport-filling fixed overlay above the page (z 40, below the
+ * popover/tooltip layers at 60/70). */
 const fsWrap = (on: boolean): CSSProperties => ({
   display: "flex",
   flexDirection: "column",
@@ -33,7 +33,7 @@ const fsWrap = (on: boolean): CSSProperties => ({
     zIndex: 40,
     background: rgb(T.canvas),
     overflow: "auto",
-    padding: "16px 20px",
+    padding: "18px 22px 24px",
     boxSizing: "border-box" as const,
   }),
 });
@@ -84,6 +84,22 @@ export default function Dashboard() {
   });
   const patch: Patch = (p) =>
     setSt((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
+  const exitMeetingMode = () => {
+    patch({ fullscreen: false });
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  };
+  const toggleMeetingMode = () => {
+    if (st.fullscreen) {
+      exitMeetingMode();
+      return;
+    }
+    patch({ fullscreen: true });
+    // Native fullscreen removes browser chrome on meeting-room displays. The
+    // fixed overlay remains a complete fallback when the browser blocks it.
+    if (document.fullscreenEnabled && !document.fullscreenElement) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -203,6 +219,7 @@ export default function Dashboard() {
         <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
         <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
         <button style={v.panelTabs.roadmap.style} onClick={v.panelTabs.roadmap.onClick}>ロードマップ</button>
+        <button style={v.panelTabs.team.style} onClick={v.panelTabs.team.onClick}>担当者</button>
       </div>
 
       {/* ── Main grid ── */}
@@ -410,13 +427,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div style={fsWrap(st.fullscreen)}>
-              <FilterControls v={v} st={st} showSort={false} />
+            <div className={st.fullscreen ? "meeting-shell" : undefined} style={fsWrap(st.fullscreen)}>
+              <FilterControls v={v} st={st} showSort={false} presentation={st.fullscreen} />
               <CalendarView
                 cal={v.calendar}
                 fullscreen={st.fullscreen}
-                onToggleFull={() => patch((s) => ({ fullscreen: !s.fullscreen }))}
-                onExitFull={() => patch({ fullscreen: false })}
+                onToggleFull={toggleMeetingMode}
+                onExitFull={exitMeetingMode}
               />
             </div>
           </>
@@ -456,16 +473,46 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div style={fsWrap(st.fullscreen)}>
-              <FilterControls v={v} st={st} showSort={false} showStatus={false} summary={v.roadmap.filterSummary} />
+            <div className={st.fullscreen ? "meeting-shell" : undefined} style={fsWrap(st.fullscreen)}>
+              <FilterControls
+                v={v}
+                st={st}
+                showSort={false}
+                showStatus={false}
+                summary={v.roadmap.filterSummary}
+                presentation={st.fullscreen}
+              />
               <RoadmapView
                 roadmap={v.roadmap}
                 fullscreen={st.fullscreen}
-                onToggleFull={() => patch((s) => ({ fullscreen: !s.fullscreen }))}
-                onExitFull={() => patch({ fullscreen: false })}
+                onToggleFull={toggleMeetingMode}
+                onExitFull={exitMeetingMode}
               />
             </div>
           </>
+        )}
+
+        {/* Team tab: owner-first view, intentionally separate from schedule views. */}
+        {v.showTeam && (
+          <div className={st.fullscreen ? "meeting-shell" : undefined} style={fsWrap(st.fullscreen)}>
+            <FilterControls
+              v={v}
+              st={st}
+              showSort={false}
+              showStatus={false}
+              summary={`稼働 ${v.team.members.length} 名 / 進行中 ${v.team.open} 件`}
+              presentation={st.fullscreen}
+            />
+            <TeamView
+              overview={v.team}
+              project={v.project}
+              fetchedAt={data.fetchedAt}
+              fullscreen={st.fullscreen}
+              onToggleFull={toggleMeetingMode}
+              onExitFull={exitMeetingMode}
+              onClearFilters={() => patch({ labels: [], assignees: [], milestones: [] })}
+            />
+          </div>
         )}
       </div>
     </div>

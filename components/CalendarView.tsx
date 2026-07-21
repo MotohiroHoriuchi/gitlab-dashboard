@@ -121,14 +121,20 @@ export default function CalendarView({
     "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; position:relative; z-index:1;",
   );
   const weekdayCell = S(
-    `padding:2px 6px 5px; font-size:12.5px; font-weight:600; letter-spacing:.04em; color:${rgb(T.muted)};`,
+    `padding:${fullscreen ? "5px 8px 8px" : "2px 6px 5px"}; font-size:${fullscreen ? "17px" : "12.5px"}; font-weight:700; color:${rgb(T.muted)};`,
   );
+  const wallControl = (style: CSSProperties): CSSProperties =>
+    fullscreen ? { ...style, padding: "10px 16px", fontSize: "16px" } : style;
   // Re-keying an element with `sparkle` remounts it, replaying these one-shot
   // anims: checkpoints shine (star + gold ring), everything else dims briefly.
   const sparkleAnim: CSSProperties = sparkle ? { animation: "gi-sparkle 3s ease-in-out" } : {};
   const cpGlow: CSSProperties = sparkle ? { animation: "gi-checkpoint-glow 3s ease-in-out" } : {};
   const dimAnim: CSSProperties = sparkle ? { animation: "gi-dim 3s ease-in-out" } : {};
-  const starWrap: CSSProperties = { color: rgb(CHECKPOINT_STAR), fontSize: "13px", ...sparkleAnim };
+  const starWrap: CSSProperties = {
+    color: rgb(CHECKPOINT_STAR),
+    fontSize: fullscreen ? "18px" : "13px",
+    ...sparkleAnim,
+  };
   const segKey = (k: string) => (sparkle ? `${k}-${sparkle}` : k);
 
   // Raw cursor-offset coordinates only — viewport clamping happens inside the
@@ -144,7 +150,7 @@ export default function CalendarView({
   return (
     <section
       style={S(
-        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:18px 20px 20px; min-width:0;`,
+        `background:${rgb(T.card)}; border:1px solid ${rgb(T.hairline)}; border-radius:16px; padding:${fullscreen ? "24px 28px 28px" : "18px 20px 20px"}; min-width:0;`,
       )}
     >
       {/* ── header: title + mode toggle + nav ── */}
@@ -153,37 +159,38 @@ export default function CalendarView({
           "display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;",
         )}
       >
-        <h2 style={S(`margin:0; font-size:16px; font-weight:700; color:${rgb(T.ink)};`)}>
+        <h2 style={S(`margin:0; font-size:${fullscreen ? "28px" : "16px"}; font-weight:700; color:${rgb(T.ink)}; text-wrap:balance;`)}>
           {cal.title}
         </h2>
         <div style={S("display:flex; align-items:center; gap:10px; flex-wrap:wrap;")}>
           <div style={S("display:flex; gap:6px;")}>
-            <button style={cal.modeBtns.month.style} onClick={cal.modeBtns.month.onClick}>
+            <button type="button" style={wallControl(cal.modeBtns.month.style)} onClick={cal.modeBtns.month.onClick}>
               月
             </button>
-            <button style={cal.modeBtns.twoweek.style} onClick={cal.modeBtns.twoweek.onClick}>
+            <button type="button" style={wallControl(cal.modeBtns.twoweek.style)} onClick={cal.modeBtns.twoweek.onClick}>
               2週
             </button>
           </div>
           <div style={S("display:flex; gap:6px;")}>
-            <button style={cal.navPrev.style} onClick={cal.navPrev.onClick} aria-label="前へ">
+            <button type="button" style={wallControl(cal.navPrev.style)} onClick={cal.navPrev.onClick} aria-label="前の期間へ">
               ‹
             </button>
-            <button style={cal.navToday.style} onClick={cal.navToday.onClick}>
+            <button type="button" style={wallControl(cal.navToday.style)} onClick={cal.navToday.onClick}>
               今日
             </button>
-            <button style={cal.navNext.style} onClick={cal.navNext.onClick} aria-label="次へ">
+            <button type="button" style={wallControl(cal.navNext.style)} onClick={cal.navNext.onClick} aria-label="次の期間へ">
               ›
             </button>
           </div>
           {onToggleFull && (
             <button
-              style={seg(!!fullscreen)}
+              type="button"
+              style={wallControl(seg(!!fullscreen))}
               onClick={onToggleFull}
               aria-pressed={!!fullscreen}
-              title={fullscreen ? "全画面を解除（Esc）" : "ツールバーとカレンダーだけを全画面表示"}
+              title={fullscreen ? "会議表示を終了（Esc）" : "カレンダーを会議用に全画面表示"}
             >
-              {fullscreen ? "✕ 全画面解除" : "⛶ 全画面"}
+              {fullscreen ? "✕ 会議表示を終了" : "⛶ 会議表示"}
             </button>
           )}
         </div>
@@ -192,7 +199,7 @@ export default function CalendarView({
       {/* ── legend ── */}
       <div
         style={S(
-          `display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; margin-bottom:10px; font-size:12.5px; color:${rgb(T.body)};`,
+          `display:flex; flex-wrap:wrap; align-items:center; gap:${fullscreen ? "10px 22px" : "6px 16px"}; margin-bottom:${fullscreen ? "16px" : "10px"}; font-size:${fullscreen ? "16px" : "12.5px"}; color:${rgb(T.body)};`,
         )}
       >
         <Swatch style={{ background: rgba(MILESTONE_COLOR, 0.12), border: "1px solid " + rgba(MILESTONE_COLOR, 0.45) }} text="マイルストーン" />
@@ -222,7 +229,7 @@ export default function CalendarView({
             background: "transparent",
             cursor: "pointer",
             color: rgb(T.body),
-            fontSize: "12.5px",
+            fontSize: fullscreen ? "16px" : "12.5px",
             fontFamily: SANS,
           }}
         >
@@ -233,12 +240,12 @@ export default function CalendarView({
         </button>
         {/* non-working-day toggles: click a weekday chip to hide/show its column */}
         <span style={S("margin-left:auto; display:inline-flex; align-items:center; gap:4px;")}>
-          <span style={S(`font-size:12.5px; color:${rgb(T.muted)};`)}>表示曜日</span>
+          <span style={S(`font-size:${fullscreen ? "16px" : "12.5px"}; color:${rgb(T.muted)};`)}>表示曜日</span>
           {cal.dowToggles.map((t) => (
             <button
               type="button"
               key={t.label}
-              style={t.style}
+              style={wallControl(t.style)}
               onClick={t.onClick}
               disabled={t.disabled}
               aria-pressed={t.active}
@@ -264,8 +271,19 @@ export default function CalendarView({
         <div key={week.key}>
           <div style={week.headStyle}>
             {week.days.map((d) => (
-              <div key={d.key} style={d.headStyle}>
-                <span style={d.numStyle}>{d.dayNum}</span>
+              <div
+                key={d.key}
+                style={{ ...d.headStyle, padding: fullscreen ? "6px 8px 4px" : d.headStyle.padding }}
+              >
+                <span
+                  style={{
+                    ...d.numStyle,
+                    fontSize: fullscreen ? "18px" : d.numStyle.fontSize,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {d.dayNum}
+                </span>
               </div>
             ))}
           </div>
@@ -281,7 +299,8 @@ export default function CalendarView({
                 // data-calbar keeps opening it from clearing the selection.
                 const chipRole = chipSelectionRole(selected, cal.relations, s.items ?? []);
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={segKey(s.key)}
                     data-calbar
                     style={{ ...s.style, ...dimAnim, ...selectionOverlay(chipRole) }}
@@ -289,7 +308,7 @@ export default function CalendarView({
                     title="この日の予定をすべて表示"
                   >
                     {s.overflowLabel} ▾
-                  </div>
+                  </button>
                 );
               }
               const role = selectionRole(selected, cal.relations, s.track, s.id);
@@ -315,6 +334,7 @@ export default function CalendarView({
                   role="button"
                   tabIndex={0}
                   aria-pressed={role === "self"}
+                  aria-label={s.tip?.title ?? s.label}
                   style={{
                     ...s.style,
                     ...(s.isCheckpoint ? cpGlow : dimAnim),
@@ -427,25 +447,23 @@ function DayPopover({
           const role = selectionRole(selected, relations, it.track, it.id);
           const badge = relBadgeText(role);
           return (
-            <div
+            <button
+              type="button"
               key={i}
-              role="button"
-              tabIndex={0}
               title="クリックでカレンダー上の関係を強調"
               style={{
                 display: "flex",
                 gap: "8px",
                 alignItems: "flex-start",
+                width: "100%",
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                textAlign: "left",
                 cursor: "pointer",
                 opacity: role === "dim" ? 0.45 : 1,
               }}
               onClick={() => onFocus(calBarKey(it.track, it.id))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onFocus(calBarKey(it.track, it.id));
-                }
-              }}
             >
               <span style={{ ...dot(it.color), marginTop: "4px" }} />
               <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -484,7 +502,7 @@ function DayPopover({
                   </div>
                 )}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
