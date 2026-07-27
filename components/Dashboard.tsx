@@ -13,6 +13,11 @@ import {
   sanitizeHiddenDows,
   type Patch,
 } from "@/lib/logic";
+import {
+  readDashboardUrlState,
+  toDashboardUrlState,
+  writeDashboardUrlState,
+} from "@/lib/dashboardParams";
 import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
@@ -65,10 +70,8 @@ function loadHiddenDows(): number[] {
   }
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState<ApiResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [st, setSt] = useState<DashState>({
+function createDefaultState(): DashState {
+  return {
     status: "all",
     sort: "linger",
     labels: [],
@@ -81,7 +84,25 @@ export default function Dashboard() {
     calMode: "twoweek",
     calAnchor: Math.floor(Date.now() / DAY),
     fullscreen: false,
-  });
+  };
+}
+
+function loadInitialState(defaults: DashState): DashState {
+  if (typeof window === "undefined") return defaults;
+  return {
+    ...defaults,
+    ...readDashboardUrlState(
+      new URLSearchParams(window.location.search),
+      toDashboardUrlState(defaults),
+    ),
+  };
+}
+
+export default function Dashboard() {
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [defaults] = useState<DashState>(createDefaultState);
+  const [st, setSt] = useState<DashState>(() => loadInitialState(defaults));
   const patch: Patch = (p) =>
     setSt((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
   const exitMeetingMode = () => {
@@ -100,6 +121,49 @@ export default function Dashboard() {
       void document.documentElement.requestFullscreen().catch(() => undefined);
     }
   };
+
+  // Keep shareable view/filter state in the URL without adding one browser
+  // history entry per click. Unknown query parameters (for embedding, etc.)
+  // are left untouched.
+  useEffect(() => {
+    const current = new URL(window.location.href);
+    const nextParams = writeDashboardUrlState(
+      current.searchParams,
+      toDashboardUrlState(st),
+      toDashboardUrlState(defaults),
+    );
+    const query = nextParams.toString();
+    const nextPath = current.pathname + (query ? `?${query}` : "") + current.hash;
+    const currentPath = current.pathname + current.search + current.hash;
+    if (nextPath !== currentPath) {
+      window.history.replaceState(window.history.state, "", nextPath);
+    }
+  }, [
+    defaults,
+    st.panel,
+    st.status,
+    st.sort,
+    st.labels,
+    st.assignees,
+    st.milestones,
+    st.groupBy,
+    st.calMode,
+    st.calAnchor,
+  ]);
+
+  // A URL reached through browser history is authoritative for the persisted
+  // controls. Ephemeral state (hover/fullscreen/hidden weekdays) stays local.
+  useEffect(() => {
+    const onPopState = () => {
+      const restored = readDashboardUrlState(
+        new URLSearchParams(window.location.search),
+        toDashboardUrlState(defaults),
+      );
+      setSt((current) => ({ ...current, ...restored }));
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [defaults]);
 
   useEffect(() => {
     try {
