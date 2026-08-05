@@ -22,9 +22,10 @@ import type { ApiResponse, DashState } from "@/lib/types";
 import FilterControls from "@/components/FilterControls";
 import CalendarView from "@/components/CalendarView";
 import RoadmapView from "@/components/RoadmapView";
+import ExecutiveScheduleView from "@/components/ExecutiveScheduleView";
 import TeamView from "@/components/TeamView";
 
-/** Toolbar+view wrapper for the calendar/roadmap/team tabs. In fullscreen it
+/** Toolbar+view wrapper for the calendar/schedule/roadmap/team tabs. In fullscreen it
  * turns into a viewport-filling fixed overlay above the page (z 40, below the
  * popover/tooltip layers at 60/70). */
 const fsWrap = (on: boolean): CSSProperties => ({
@@ -70,7 +71,17 @@ function loadHiddenDows(): number[] {
   }
 }
 
+function shiftUtcMonths(day: number, months: number): number {
+  const d = new Date(day * DAY);
+  const targetMonth = d.getUTCMonth() + months;
+  const last = new Date(Date.UTC(d.getUTCFullYear(), targetMonth + 1, 0)).getUTCDate();
+  return Math.floor(
+    Date.UTC(d.getUTCFullYear(), targetMonth, Math.min(d.getUTCDate(), last)) / DAY,
+  );
+}
+
 function createDefaultState(): DashState {
+  const today = Math.floor(Date.now() / DAY);
   return {
     status: "all",
     sort: "linger",
@@ -82,7 +93,9 @@ function createDefaultState(): DashState {
     hovered: null,
     panel: "ranking",
     calMode: "twoweek",
-    calAnchor: Math.floor(Date.now() / DAY),
+    calAnchor: today,
+    scheduleStart: shiftUtcMonths(today, -1),
+    scheduleEnd: shiftUtcMonths(today, 5),
     fullscreen: false,
   };
 }
@@ -149,6 +162,8 @@ export default function Dashboard() {
     st.groupBy,
     st.calMode,
     st.calAnchor,
+    st.scheduleStart,
+    st.scheduleEnd,
   ]);
 
   // A URL reached through browser history is authoritative for the persisted
@@ -282,6 +297,7 @@ export default function Dashboard() {
         <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
         <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
         <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
+        <button style={v.panelTabs.schedule.style} onClick={v.panelTabs.schedule.onClick}>大日程</button>
         <button style={v.panelTabs.roadmap.style} onClick={v.panelTabs.roadmap.onClick}>ロードマップ</button>
         <button style={v.panelTabs.team.style} onClick={v.panelTabs.team.onClick}>担当者</button>
       </div>
@@ -501,6 +517,32 @@ export default function Dashboard() {
               />
             </div>
           </>
+        )}
+
+        {/* Executive schedule: owner swimlanes over official milestone dates. */}
+        {v.showSchedule && (
+          <div className={st.fullscreen ? "meeting-shell" : undefined} style={fsWrap(st.fullscreen)}>
+            <FilterControls
+              v={v}
+              st={st}
+              showSort={false}
+              showStatus={false}
+              summary={v.schedule.filterSummary}
+              presentation={st.fullscreen}
+            />
+            <ExecutiveScheduleView
+              schedule={v.schedule}
+              startDay={st.scheduleStart}
+              endDay={st.scheduleEnd}
+              defaultStart={defaults.scheduleStart}
+              defaultEnd={defaults.scheduleEnd}
+              onRangeChange={(scheduleStart, scheduleEnd) => patch({ scheduleStart, scheduleEnd })}
+              fullscreen={st.fullscreen}
+              onToggleFull={toggleMeetingMode}
+              onExitFull={exitMeetingMode}
+              onClearFilters={() => patch({ labels: [], assignees: [], milestones: [] })}
+            />
+          </div>
         )}
 
         {/* Roadmap tab: milestone-progress timeline. Progress needs open+closed,

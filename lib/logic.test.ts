@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   assignLanes,
   buildCalendar,
+  buildExecutiveSchedule,
   buildMilestoneCalendar,
   buildRelationIndex,
   buildTeamOverview,
@@ -45,6 +46,8 @@ function twoWeekState(anchor: number): DashState {
     panel: "calendar",
     calMode: "twoweek",
     calAnchor: anchor,
+    scheduleStart: dayIndex("2026-06-01"),
+    scheduleEnd: dayIndex("2026-12-01"),
     fullscreen: false,
   };
 }
@@ -780,6 +783,8 @@ describe("distribution box plots (renderVals)", () => {
     panel: "dist",
     calMode: "twoweek",
     calAnchor: TODAY,
+    scheduleStart: dayIndex("2026-06-01"),
+    scheduleEnd: dayIndex("2026-12-01"),
     fullscreen: false,
   });
   const meta = { repo: "r", project: "R", asOf: "2026-07-01", milestones: [], checkpointLabel: "checkpoint" };
@@ -838,6 +843,8 @@ describe("label filtering spans all labels (display stays on the first)", () => 
     panel: "ranking",
     calMode: "twoweek",
     calAnchor: TODAY,
+    scheduleStart: dayIndex("2026-06-01"),
+    scheduleEnd: dayIndex("2026-12-01"),
     fullscreen: false,
   });
   // #1 leads with A but also carries B; #2 only has A.
@@ -911,6 +918,51 @@ describe("milestoneHealth", () => {
   });
 });
 
+describe("buildExecutiveSchedule", () => {
+  const milestones: Milestone[] = [
+    { id: 1, title: "Release", startDate: "2026-06-15", dueDate: "2026-08-15", state: "active" },
+    { id: 2, title: "Migration", startDate: "2026-07-01", dueDate: "2026-09-01", state: "active" },
+    { id: 3, title: "No plan", startDate: null, dueDate: "2026-09-30", state: "active" },
+    { id: 4, title: "Next year", startDate: "2027-01-01", dueDate: "2027-02-01", state: "active" },
+  ];
+
+  it("groups only Open work by assignee and repeats a milestone for each owner", () => {
+    const issues = [
+      mkIssue({ id: 1, assignee: "Alice", milestone: "Release", isOpen: true, dueDate: "2026-06-20" }),
+      mkIssue({ id: 2, assignee: "Bob", milestone: "Release", isOpen: true, dueDate: "2026-07-10" }),
+      mkIssue({ id: 3, assignee: "Alice", milestone: "Release", isOpen: false, closedAt: "2026-06-25" }),
+    ];
+    const result = buildExecutiveSchedule(issues, milestones, TODAY, dayIndex("2026-06-01"), dayIndex("2026-12-01"));
+    expect(result.lanes.map((lane) => lane.name).sort()).toEqual(["Alice", "Bob"]);
+    expect(result.open).toBe(2);
+    expect(result.lanes.every((lane) => lane.bars[0].title === "Release")).toBe(true);
+    expect(result.lanes.find((lane) => lane.name === "Alice")!.bars[0].issues.map((it) => it.id)).toEqual([1]);
+  });
+
+  it("packs overlapping milestones into sublanes and clips range-crossing bars", () => {
+    const issues = [
+      mkIssue({ id: 1, assignee: "Alice", milestone: "Release" }),
+      mkIssue({ id: 2, assignee: "Alice", milestone: "Migration" }),
+    ];
+    const result = buildExecutiveSchedule(issues, milestones, TODAY, dayIndex("2026-07-01"), dayIndex("2026-08-01"));
+    const lane = result.lanes[0];
+    expect(lane.sublaneCount).toBe(2);
+    expect(lane.bars.find((bar) => bar.title === "Release")!.continuesBefore).toBe(true);
+    expect(lane.bars.every((bar) => bar.continuesAfter)).toBe(true);
+  });
+
+  it("separates incomplete plans and counts scheduled milestones outside the range", () => {
+    const issues = [
+      mkIssue({ id: 1, assignee: "Alice", milestone: "No plan" }),
+      mkIssue({ id: 2, assignee: "Alice", milestone: "Next year" }),
+    ];
+    const result = buildExecutiveSchedule(issues, milestones, TODAY, dayIndex("2026-06-01"), dayIndex("2026-12-01"));
+    expect(result.unscheduled[0].items[0].title).toBe("No plan");
+    expect(result.outOfRange).toBe(1);
+    expect(result.lanes).toHaveLength(0);
+  });
+});
+
 describe("buildMilestoneCalendar", () => {
   const ms: Milestone = { id: 1, title: "MS", startDate: "2026-06-20", dueDate: "2026-07-11", state: "active" };
   const subset = () => [
@@ -965,6 +1017,8 @@ describe("buildMilestoneCalendar", () => {
     expect(r.rows[0].spark.hasData).toBe(true);
     expect(r.rows[0].burndown.hasData).toBe(true);
     expect(r.gridLines.length).toBeGreaterThan(0);
+    expect(r.weekLines.map((w) => w.label)).toEqual(["6/22", "6/29", "7/6", "7/13", "7/20"]);
+    expect(r.weekLines.every((w) => w.date.startsWith("2026-"))).toBe(true);
     expect(r.todayX).not.toBeNull();
     expect(r.empty).toBe(false);
   });

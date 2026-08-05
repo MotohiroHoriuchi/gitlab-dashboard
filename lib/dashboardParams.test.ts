@@ -18,6 +18,8 @@ const defaults: DashboardUrlState = {
   groupBy: "label",
   calMode: "twoweek",
   calAnchor: dayIndex("2026-07-27"),
+  scheduleStart: dayIndex("2026-06-27"),
+  scheduleEnd: dayIndex("2026-12-27"),
 };
 
 describe("dashboard URL parameters", () => {
@@ -28,6 +30,7 @@ describe("dashboard URL parameters", () => {
     );
 
     expect(readDashboardUrlState(params, defaults)).toEqual({
+      ...defaults,
       panel: "calendar",
       status: "open",
       sort: "oldest",
@@ -66,6 +69,8 @@ describe("dashboard URL parameters", () => {
       groupBy: "milestone",
       calMode: "month",
       calAnchor: dayIndex("2026-08-03"),
+      scheduleStart: dayIndex("2026-08-01"),
+      scheduleEnd: dayIndex("2027-01-31"),
     };
 
     const written = writeDashboardUrlState(current, state, defaults);
@@ -80,6 +85,27 @@ describe("dashboard URL parameters", () => {
     expect(written.get("group")).toBe("milestone");
     expect(written.get("cal")).toBe("month");
     expect(written.get("date")).toBe("2026-08-03");
+    expect(written.get("scheduleStart")).toBe("2026-08-01");
+    expect(written.get("scheduleEnd")).toBe("2027-01-31");
+  });
+
+  it("restores a valid executive-schedule range and rejects invalid spans", () => {
+    const valid = new URLSearchParams(
+      "tab=schedule&scheduleStart=2026-08-01&scheduleEnd=2027-07-31",
+    );
+    expect(readDashboardUrlState(valid, defaults)).toMatchObject({
+      panel: "schedule",
+      scheduleStart: dayIndex("2026-08-01"),
+      scheduleEnd: dayIndex("2027-07-31"),
+    });
+
+    const tooLong = new URLSearchParams(
+      "scheduleStart=2026-01-01&scheduleEnd=2027-02-01",
+    );
+    expect(readDashboardUrlState(tooLong, defaults)).toMatchObject({
+      scheduleStart: defaults.scheduleStart,
+      scheduleEnd: defaults.scheduleEnd,
+    });
   });
 
   it("omits defaults and round-trips encoded filter names", () => {

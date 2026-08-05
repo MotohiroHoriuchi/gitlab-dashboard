@@ -65,7 +65,7 @@ export interface ApiResponse {
 export type StatusFilter = "all" | "open" | "closed";
 export type SortMode = "linger" | "recent" | "oldest";
 export type GroupBy = "label" | "assignee" | "milestone";
-export type Panel = "ranking" | "dist" | "calendar" | "roadmap" | "team";
+export type Panel = "ranking" | "dist" | "calendar" | "schedule" | "roadmap" | "team";
 export type CalMode = "month" | "twoweek";
 
 export interface DashState {
@@ -80,6 +80,8 @@ export interface DashState {
   panel: Panel;
   calMode: CalMode;
   calAnchor: number; // UTC day-index (floor(ms/DAY)) of the anchor day
+  scheduleStart: number; // executive schedule inclusive start, UTC day-index
+  scheduleEnd: number; // executive schedule inclusive end, UTC day-index
   fullscreen: boolean; // calendar/roadmap: toolbar+view overlay the whole viewport (not persisted)
 }
 

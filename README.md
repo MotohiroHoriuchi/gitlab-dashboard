@@ -61,7 +61,11 @@
 
 > 目標に到達するために、やることを可視化しましょう。
 
-### 5. 担当者：誰が、いま何を進めてる？
+### 5. 大日程：誰が、どの計画を動かしてる？
+
+> Openイシューの担当者ごとに、正式なマイルストーン期間をスイムレーン表示。開始日・終了日は約1か月〜1年の範囲で自由に変更でき、日程が足りない計画は「日程未設定」に分離します。
+
+### 6. 担当者：誰が、いま何を進めてる？
 
 > 進行中の仕事を担当者ごとにまとめ、期限超過と7日以内の作業を優先表示。朝会や進捗会議でチーム全体を俯瞰できます。
 
@@ -189,6 +193,10 @@ docker compose up --build
   - 各要素（バー・締切 tick・+N チップ・マイルストーン名）にホバーで詳細（カレンダーと共通のツールチップ）
   - 行クリックで **バーンダウン**（残数＝実線／理想＝破線／総スコープ＝薄線、created_at・closed_at から再構成）と
     **残作業バケット**（超過／今週／それ以降）を展開
+- **大日程**：Openイシューを担当者×マイルストーンで集約し、担当者スイムレーン上に正式な開始日→期限を表示。
+  - 開始日・終了日を28〜366日の範囲で自由指定し、URLから同じ期間を共有・復元
+  - 重なるマイルストーンはサブレーンへ配置し、期間外へ続くバーは端部マーカーで表現
+  - バークリックで担当中のOpenイシューをリスク順に展開。開始日または期限がない計画は担当者別の「日程未設定」に分離
 - **担当者**：Openの仕事を担当者ごとに集計し、進行中・期限超過・7日以内の件数と、リスク順の上位3件を表示
 - **全画面モード**：カレンダー、ロードマップ、担当者で「⛶ 全画面」を押すと、フィルタバーと今のビューだけをビューポート全面に表示。**Esc** で解除。
   カレンダーは全画面時に表示レーン上限が倍（月 3→6 / 2週 6→12）
@@ -205,7 +213,7 @@ npm run typecheck  # 型チェック
 npm run build      # 本番ビルド（.next/standalone を生成）
 ```
 
-`MOCK_GITLAB=1` のときは `lib/devMock.ts` のサンプル（5ビューを一通り描けるよう滞留・分布・納期予実・マイルストーン・担当者を含む）で描画する。GitLab 認証は不要。
+`MOCK_GITLAB=1` のときは `lib/devMock.ts` のサンプル（6ビューを一通り描けるよう滞留・分布・納期予実・大日程・マイルストーン・担当者を含む）で描画する。GitLab 認証は不要。
 
 </details>
 
@@ -220,8 +228,9 @@ app/
   api/healthz/route.ts # ヘルスチェック
   globals.css  icon.svg
 components/
-  Dashboard.tsx        # 'use client'、4 ビューの描画 + 状態
+  Dashboard.tsx        # 'use client'、6 ビューの描画 + 状態
   CalendarView.tsx     # カレンダー描画（ツールチップ / あふれポップ / 演出）
+  ExecutiveScheduleView.tsx # 大日程（担当者スイムレーン / 自由期間）
   RoadmapView.tsx      # ロードマップ描画（進捗KPI / バーンダウン / 締切tick）
   HoverTip.tsx         # カレンダー・ロードマップ共通のホバーツールチップ
   FilterControls.tsx   # 状態・ラベル・担当者のフィルタバー（一覧/カレンダー共有）
@@ -229,7 +238,7 @@ components/
 lib/
   gitlab.ts            # GitLab 取得（ページング）+ Issue / Milestone 変換
   logic.ts             # 集計・箱ひげ・カレンダー/ロードマップ view-model（renderVals / buildCalendar / buildMilestoneCalendar）
-  devMock.ts           # 開発用モックデータ（MOCK_GITLAB 時）
+  devMock.ts           # 開発用モックデータ（MOCK_GITLAB 時・大日程を含む）
   types.ts
   *.test.ts            # vitest（変換・集計・カレンダー）
 scripts/docker.sh      # Docker build / up / run / stop / logs ラッパー

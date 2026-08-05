@@ -385,6 +385,71 @@ export interface TeamOverview {
   dueSoon: number;
 }
 
+export type ExecutiveSchedulePhase = "active" | "future" | "overdue";
+export interface ExecutiveScheduleIssue {
+  id: number;
+  title: string;
+  dueLabel: string;
+  risk: "overdue" | "soon" | "normal";
+  isCheckpoint: boolean;
+}
+export interface ExecutiveScheduleBar {
+  key: string;
+  milestoneId: number;
+  title: string;
+  startDay: number;
+  endDay: number;
+  left: number;
+  width: number;
+  sublane: number;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+  phase: ExecutiveSchedulePhase;
+  openCount: number;
+  overdue: number;
+  focusTitle: string;
+  issues: ExecutiveScheduleIssue[];
+}
+export interface ExecutiveScheduleLane {
+  name: string;
+  open: number;
+  milestoneCount: number;
+  overdue: number;
+  sublaneCount: number;
+  bars: ExecutiveScheduleBar[];
+}
+export interface ExecutiveUnscheduledItem {
+  milestoneId: number | null;
+  title: string;
+  openCount: number;
+  issues: ExecutiveScheduleIssue[];
+}
+export interface ExecutiveUnscheduledGroup {
+  name: string;
+  items: ExecutiveUnscheduledItem[];
+}
+export interface ExecutiveAxisMark {
+  x: number;
+  label: string;
+  date: string;
+  kind: "month" | "week";
+}
+export interface ExecutiveScheduleVals {
+  lanes: ExecutiveScheduleLane[];
+  unscheduled: ExecutiveUnscheduledGroup[];
+  axisMarks: ExecutiveAxisMark[];
+  todayX: number | null;
+  rangeDays: number;
+  rangeLabel: string;
+  open: number;
+  people: number;
+  milestones: number;
+  overdue: number;
+  outOfRange: number;
+  empty: boolean;
+  filterSummary: string;
+}
+
 export interface Vals {
   repo: string;
   project: string;
@@ -404,10 +469,12 @@ export interface Vals {
   showRank: boolean;
   showDist: boolean;
   showCal: boolean;
+  showSchedule: boolean;
   showRoadmap: boolean;
   showTeam: boolean;
-  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn; roadmap: Btn; team: Btn };
+  panelTabs: { ranking: Btn; dist: Btn; calendar: Btn; schedule: Btn; roadmap: Btn; team: Btn };
   calendar: CalVals;
+  schedule: ExecutiveScheduleVals;
   roadmap: RoadmapVals;
   team: TeamOverview;
   labelOptions: FilterOption[];
@@ -498,6 +565,7 @@ export function renderVals(
   const showRank = st.panel === "ranking";
   const showDist = st.panel === "dist";
   const showCal = st.panel === "calendar";
+  const showSchedule = st.panel === "schedule";
   const showRoadmap = st.panel === "roadmap";
   const showTeam = st.panel === "team";
   const todayIndex = dayIndex(meta.asOf);
@@ -533,6 +601,13 @@ export function renderVals(
     calMilestones,
     todayIndex,
     meta.checkpointLabel,
+  );
+  const schedule = buildExecutiveSchedule(
+    data.filter(passScope),
+    calMilestones,
+    todayIndex,
+    st.scheduleStart,
+    st.scheduleEnd,
   );
   const team = buildTeamOverview(data.filter(passScope), todayIndex);
   const openArr = filtered.filter((i) => i.isOpen);
@@ -987,16 +1062,19 @@ export function renderVals(
     showRank,
     showDist,
     showCal,
+    showSchedule,
     showRoadmap,
     showTeam,
     panelTabs: {
       ranking: { style: seg(st.panel === "ranking"), onClick: setS({ panel: "ranking" }) },
       dist: { style: seg(st.panel === "dist"), onClick: setS({ panel: "dist" }) },
       calendar: { style: seg(st.panel === "calendar"), onClick: setS({ panel: "calendar" }) },
+      schedule: { style: seg(st.panel === "schedule"), onClick: setS({ panel: "schedule" }) },
       roadmap: { style: seg(st.panel === "roadmap"), onClick: setS({ panel: "roadmap" }) },
       team: { style: seg(st.panel === "team"), onClick: setS({ panel: "team" }) },
     },
     calendar,
+    schedule,
     roadmap,
     team,
     labelOptions,
@@ -1058,6 +1136,8 @@ export const fmtMD = (idx: number): string => {
   const d = new Date(idx * DAY);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
+/** "2026-07-08" — day-index to the machine-readable date used by <time>. */
+const fmtISODate = (idx: number): string => new Date(idx * DAY).toISOString().slice(0, 10);
 /** "2026/7/8" — day-index to a full year/month/day label (roadmap span). */
 export const fmtYMD = (idx: number): string => {
   const d = new Date(idx * DAY);
@@ -1361,6 +1441,221 @@ export function buildTeamOverview(issues: Issue[], todayIndex: number): TeamOver
     open: open.length,
     overdue: members.reduce((sum, m) => sum + m.overdue, 0),
     dueSoon: members.reduce((sum, m) => sum + m.dueSoon, 0),
+  };
+}
+
+/** Management-scale calendar: Open work is grouped by assignee, then by its
+ * official GitLab milestone. Milestone dates are never inferred from issue
+ * history here; incomplete plans stay visible in the unscheduled section. */
+export function buildExecutiveSchedule(
+  issues: Issue[],
+  milestones: Milestone[],
+  todayIndex: number,
+  rangeStart: number,
+  rangeEnd: number,
+): ExecutiveScheduleVals {
+  const start = Math.min(rangeStart, rangeEnd);
+  const end = Math.max(rangeStart, rangeEnd);
+  const rangeDays = end - start + 1;
+  const denom = Math.max(1, rangeDays);
+  const xOf = (day: number) => Math.max(0, Math.min(100, ((day - start) / denom) * 100));
+  const milestoneByTitle = new Map(milestones.map((m) => [m.title, m]));
+  const open = issues.filter((it) => it.isOpen);
+
+  const dueDay = (it: Issue): number | null => {
+    if (!it.dueDate) return null;
+    const parsed = dayIndex(it.dueDate);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+  const riskOf = (it: Issue): ExecutiveScheduleIssue["risk"] => {
+    const due = dueDay(it);
+    if (due === null) return "normal";
+    if (due < todayIndex) return "overdue";
+    if (due <= todayIndex + 7) return "soon";
+    return "normal";
+  };
+  const riskRank = (it: Issue): number => {
+    const risk = riskOf(it);
+    return risk === "overdue" ? 0 : it.isCheckpoint ? 1 : risk === "soon" ? 2 : 3;
+  };
+  const toIssue = (it: Issue): ExecutiveScheduleIssue => {
+    const due = dueDay(it);
+    const risk = riskOf(it);
+    return {
+      id: it.id,
+      title: it.title,
+      dueLabel:
+        due === null
+          ? "期限なし"
+          : risk === "overdue"
+            ? `${todayIndex - due}日超過`
+            : due === todayIndex
+              ? "本日期限"
+              : `${fmtMD(due)}期限`,
+      risk,
+      isCheckpoint: it.isCheckpoint,
+    };
+  };
+  const orderIssues = (arr: Issue[]): Issue[] =>
+    arr.slice().sort((a, b) => {
+      const ad = dueDay(a) ?? Number.POSITIVE_INFINITY;
+      const bd = dueDay(b) ?? Number.POSITIVE_INFINITY;
+      return riskRank(a) - riskRank(b) || ad - bd || b.linger - a.linger || a.id - b.id;
+    });
+
+  const grouped = new Map<string, Map<string, Issue[]>>();
+  for (const it of open) {
+    const owner = it.assignee || "未割当";
+    let byMilestone = grouped.get(owner);
+    if (!byMilestone) grouped.set(owner, (byMilestone = new Map()));
+    const bucket = byMilestone.get(it.milestone);
+    if (bucket) bucket.push(it);
+    else byMilestone.set(it.milestone, [it]);
+  }
+
+  const lanes: ExecutiveScheduleLane[] = [];
+  const unscheduled: ExecutiveUnscheduledGroup[] = [];
+  const visibleMilestones = new Set<string>();
+  const allMilestones = new Set<string>();
+  const outOfRangeMilestones = new Set<string>();
+
+  for (const [name, byMilestone] of grouped) {
+    const rawBars: Omit<ExecutiveScheduleBar, "sublane">[] = [];
+    const missing: ExecutiveUnscheduledItem[] = [];
+    let ownerOverdue = 0;
+    let ownerOpen = 0;
+
+    for (const [title, memberIssues] of byMilestone) {
+      ownerOpen += memberIssues.length;
+      ownerOverdue += memberIssues.filter((it) => riskOf(it) === "overdue").length;
+      allMilestones.add(title);
+      const ordered = orderIssues(memberIssues);
+      const refs = ordered.map(toIssue);
+      const milestone = milestoneByTitle.get(title);
+      const milestoneStart = milestone?.startDate ? dayIndex(milestone.startDate) : NaN;
+      const milestoneEnd = milestone?.dueDate ? dayIndex(milestone.dueDate) : NaN;
+      const hasDates =
+        !!milestone &&
+        Number.isFinite(milestoneStart) &&
+        Number.isFinite(milestoneEnd) &&
+        milestoneEnd >= milestoneStart;
+
+      if (!hasDates) {
+        missing.push({
+          milestoneId: milestone?.id ?? null,
+          title,
+          openCount: memberIssues.length,
+          issues: refs,
+        });
+        continue;
+      }
+      if (milestoneEnd < start || milestoneStart > end) {
+        outOfRangeMilestones.add(title);
+        continue;
+      }
+
+      visibleMilestones.add(title);
+      const clipStart = Math.max(start, milestoneStart);
+      const clipEnd = Math.min(end, milestoneEnd);
+      const phase: ExecutiveSchedulePhase =
+        todayIndex > milestoneEnd
+          ? "overdue"
+          : todayIndex >= milestoneStart
+            ? "active"
+            : "future";
+      rawBars.push({
+        key: `${name}:${milestone.id}`,
+        milestoneId: milestone.id,
+        title,
+        startDay: milestoneStart,
+        endDay: milestoneEnd,
+        left: xOf(clipStart),
+        width: Math.max(0.65, ((clipEnd - clipStart + 1) / denom) * 100),
+        continuesBefore: milestoneStart < start,
+        continuesAfter: milestoneEnd > end,
+        phase,
+        openCount: memberIssues.length,
+        overdue: refs.filter((it) => it.risk === "overdue").length,
+        focusTitle: ordered[0]?.title ?? "",
+        issues: refs,
+      });
+    }
+
+    rawBars.sort((a, b) => a.startDay - b.startDay || a.endDay - b.endDay || a.title.localeCompare(b.title));
+    const sublaneEnds: number[] = [];
+    const bars: ExecutiveScheduleBar[] = rawBars.map((bar) => {
+      let sublane = sublaneEnds.findIndex((lastEnd) => bar.startDay > lastEnd);
+      if (sublane < 0) sublane = sublaneEnds.length;
+      sublaneEnds[sublane] = bar.endDay;
+      return { ...bar, sublane };
+    });
+
+    if (bars.length) {
+      lanes.push({
+        name,
+        open: ownerOpen,
+        milestoneCount: byMilestone.size,
+        overdue: ownerOverdue,
+        sublaneCount: Math.max(1, sublaneEnds.length),
+        bars,
+      });
+    }
+    if (missing.length) {
+      missing.sort((a, b) => b.openCount - a.openCount || a.title.localeCompare(b.title));
+      unscheduled.push({ name, items: missing });
+    }
+  }
+
+  lanes.sort(
+    (a, b) =>
+      b.overdue - a.overdue || b.open - a.open || b.milestoneCount - a.milestoneCount || a.name.localeCompare(b.name),
+  );
+  unscheduled.sort((a, b) => a.name.localeCompare(b.name));
+
+  const axisMarks: ExecutiveAxisMark[] = [];
+  const first = new Date(start * DAY);
+  let month = Math.floor(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1) / DAY);
+  if (month < start) month = Math.floor(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 1) / DAY);
+  while (month <= end) {
+    const d = new Date(month * DAY);
+    axisMarks.push({
+      x: xOf(month),
+      label: d.getUTCMonth() === 0 ? `${d.getUTCFullYear()}/1月` : `${d.getUTCMonth() + 1}月`,
+      date: new Date(month * DAY).toISOString().slice(0, 10),
+      kind: "month",
+    });
+    month = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / DAY);
+  }
+  if (rangeDays <= 120) {
+    let week = weekStartOnOrBefore(start);
+    if (week < start) week += 7;
+    while (week <= end) {
+      axisMarks.push({
+        x: xOf(week),
+        label: fmtMD(week),
+        date: new Date(week * DAY).toISOString().slice(0, 10),
+        kind: "week",
+      });
+      week += 7;
+    }
+  }
+
+  const overdue = open.filter((it) => riskOf(it) === "overdue").length;
+  const milestoneCount = new Set([...visibleMilestones, ...allMilestones]).size;
+  return {
+    lanes,
+    unscheduled,
+    axisMarks,
+    todayX: todayIndex >= start && todayIndex <= end ? xOf(todayIndex) : null,
+    rangeDays,
+    rangeLabel: `${fmtYMD(start)} 〜 ${fmtYMD(end)}`,
+    open: open.length,
+    people: grouped.size,
+    milestones: milestoneCount,
+    overdue,
+    outOfRange: outOfRangeMilestones.size,
+    empty: lanes.length === 0 && unscheduled.length === 0,
+    filterSummary: `稼働 ${grouped.size} 名 / 進行中 ${open.length} 件 / マイルストーン ${milestoneCount} 件`,
   };
 }
 
@@ -2096,6 +2391,11 @@ export interface RoadmapGridLine {
   x: number; // 0..100
   label: string | null;
 }
+export interface RoadmapWeekLine {
+  x: number; // 0..100
+  label: string; // "7/6"
+  date: string; // ISO date for semantic <time dateTime>
+}
 export interface RoadmapTick {
   id: number;
   x: number; // 0..100
@@ -2173,7 +2473,7 @@ export interface RoadmapRow {
 export interface RoadmapVals {
   rows: RoadmapRow[];
   gridLines: RoadmapGridLine[]; // month lines
-  weekStepPct: number; // week gridline spacing (repeating-linear-gradient)
+  weekLines: RoadmapWeekLine[]; // Monday guide lines with visible dates
   todayX: number | null; // 0..100, null when out of span
   spanLabel: string;
   summary: ScheduleSummary;
@@ -2363,7 +2663,20 @@ export function buildMilestoneCalendar(
       idx = Math.floor(Date.UTC(dd.getUTCFullYear(), mo + 1, 1) / DAY);
     }
   }
-  const weekStepPct = (7 / denom) * 100;
+
+  // Weekly guide lines are aligned to Monday so their meaning stays stable
+  // when the auto-fit domain changes. The visible date labels in RoadmapView
+  // make the guide interval explicit instead of leaving it as an unlabeled
+  // repeating background.
+  const weekLines: RoadmapWeekLine[] = [];
+  {
+    let idx = weekStartOnOrBefore(spanStart);
+    if (idx < spanStart) idx += 7;
+    while (idx <= spanEnd) {
+      weekLines.push({ x: xOf(idx), label: fmtMD(idx), date: fmtISODate(idx) });
+      idx += 7;
+    }
+  }
   const todayX = todayIndex >= spanStart && todayIndex <= spanEnd ? xOf(todayIndex) : null;
 
   const toRef = (it: Issue): RoadmapIssueRef => {
@@ -2528,7 +2841,7 @@ export function buildMilestoneCalendar(
   return {
     rows,
     gridLines,
-    weekStepPct,
+    weekLines,
     todayX,
     spanLabel: `${fmtYMD(spanStart)} 〜 ${fmtYMD(spanEnd)}`,
     summary: scheduleSummary(issues, todayIndex),

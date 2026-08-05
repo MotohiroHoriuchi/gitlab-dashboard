@@ -18,9 +18,11 @@ export type DashboardUrlState = Pick<
   | "groupBy"
   | "calMode"
   | "calAnchor"
+  | "scheduleStart"
+  | "scheduleEnd"
 >;
 
-const PANELS = ["ranking", "dist", "calendar", "roadmap", "team"] as const;
+const PANELS = ["ranking", "dist", "calendar", "schedule", "roadmap", "team"] as const;
 const STATUSES = ["all", "open", "closed"] as const;
 const SORTS = ["linger", "recent", "oldest"] as const;
 const GROUPS = ["label", "assignee", "milestone"] as const;
@@ -36,6 +38,8 @@ const PARAM_KEYS = [
   "group",
   "cal",
   "date",
+  "scheduleStart",
+  "scheduleEnd",
 ] as const;
 
 const DAY = 86_400_000;
@@ -80,6 +84,8 @@ export function toDashboardUrlState(state: DashState): DashboardUrlState {
     groupBy,
     calMode,
     calAnchor,
+    scheduleStart,
+    scheduleEnd,
   } = state;
   return {
     panel,
@@ -91,6 +97,8 @@ export function toDashboardUrlState(state: DashState): DashboardUrlState {
     groupBy,
     calMode,
     calAnchor,
+    scheduleStart,
+    scheduleEnd,
   };
 }
 
@@ -100,6 +108,10 @@ export function readDashboardUrlState(
   params: URLSearchParams,
   fallback: DashboardUrlState,
 ): DashboardUrlState {
+  const candidateStart = readDay(params.get("scheduleStart"), fallback.scheduleStart);
+  const candidateEnd = readDay(params.get("scheduleEnd"), fallback.scheduleEnd);
+  const candidateDays = candidateEnd - candidateStart + 1;
+  const validScheduleRange = candidateDays >= 28 && candidateDays <= 366;
   return {
     panel: readEnum<Panel>(params, "tab", PANELS, fallback.panel),
     status: readEnum<StatusFilter>(params, "status", STATUSES, fallback.status),
@@ -110,6 +122,8 @@ export function readDashboardUrlState(
     groupBy: readEnum<GroupBy>(params, "group", GROUPS, fallback.groupBy),
     calMode: readEnum<CalMode>(params, "cal", CAL_MODES, fallback.calMode),
     calAnchor: readDay(params.get("date"), fallback.calAnchor),
+    scheduleStart: validScheduleRange ? candidateStart : fallback.scheduleStart,
+    scheduleEnd: validScheduleRange ? candidateEnd : fallback.scheduleEnd,
   };
 }
 
@@ -132,6 +146,10 @@ export function writeDashboardUrlState(
   if (state.groupBy !== fallback.groupBy) next.set("group", state.groupBy);
   if (state.calMode !== fallback.calMode) next.set("cal", state.calMode);
   if (state.calAnchor !== fallback.calAnchor) next.set("date", formatDay(state.calAnchor));
+  if (state.scheduleStart !== fallback.scheduleStart)
+    next.set("scheduleStart", formatDay(state.scheduleStart));
+  if (state.scheduleEnd !== fallback.scheduleEnd)
+    next.set("scheduleEnd", formatDay(state.scheduleEnd));
 
   return next;
 }

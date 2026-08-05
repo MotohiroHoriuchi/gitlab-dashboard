@@ -1,8 +1,7 @@
 // TEMPORARY dev-only mock data. Used by app/api/issues/route.ts ONLY when the
 // MOCK_GITLAB env flag is set (see .env.local). Lets the dashboard render all
-// three views (ranking / distribution / calendar) without a live GitLab
-// connection. Safe to delete this file (and the guarded branch in the route)
-// once real credentials are available.
+// six views without a live GitLab connection. Safe to delete this file (and
+// the guarded branch in the route) once real credentials are available.
 
 import type { ApiResponse, Issue, Milestone, RelatedRef } from "./types";
 
@@ -105,11 +104,24 @@ const SEEDS: Seed[] = [
   { id: 116, title: "週末ホットフィックス（土日のみ）", labelName: "bug", color: "248 81 73", createdAt: "2026-07-04", closedAt: "2026-07-05", dueDate: "2026-07-05", assignee: "佐藤 玲", milestone: "Sprint 12" },
   // 土曜期限+遅延クローズ → 予定線が直前の可視日(金曜)にスナップする
   { id: 117, title: "土曜期限・遅延クローズ", labelName: "ops", color: "210 153 34", createdAt: "2026-07-01", closedAt: "2026-07-08", dueDate: "2026-07-04", assignee: "田中 一郎", milestone: "Sprint 12" },
+
+  // ── 管理職向け大日程。複数担当者・重複期間・未計画を一画面で確認する。
+  { id: 201, title: "契約フロー再設計", labelName: "design", color: "108 182 255", createdAt: "2026-07-18", dueDate: "2026-08-28", assignee: "鈴木 花子", milestone: "プロダクト刷新" },
+  { id: 202, title: "新UI基盤", labelName: "frontend", color: "255 166 87", createdAt: "2026-07-22", dueDate: "2026-09-18", assignee: "田中 一郎", milestone: "プロダクト刷新" },
+  { id: 203, title: "リリース判定会", labelName: "gate", color: "176 131 240", createdAt: "2026-08-01", dueDate: "2026-10-15", assignee: "鈴木 花子", milestone: "プロダクト刷新", isCheckpoint: true },
+  { id: 204, title: "移行方式の確定", labelName: "infra", color: "87 171 90", createdAt: "2026-08-01", dueDate: "2026-09-30", assignee: "佐藤 玲", milestone: "基盤移行" },
+  { id: 205, title: "段階移行ツール", labelName: "backend", color: "0 217 146", createdAt: "2026-08-03", dueDate: "2026-11-20", assignee: "田中 一郎", milestone: "基盤移行" },
+  { id: 206, title: "切替判定", labelName: "gate", color: "176 131 240", createdAt: "2026-08-04", dueDate: "2027-01-15", assignee: "佐藤 玲", milestone: "基盤移行", isCheckpoint: true },
+  { id: 207, title: "次年度テーマ整理", labelName: "planning", color: "210 153 34", createdAt: "2026-08-02", assignee: "鈴木 花子", milestone: "次年度企画" },
+  { id: 208, title: "未割当の横断課題", labelName: "ops", color: "210 153 34", createdAt: "2026-08-04", dueDate: "2026-09-10", assignee: "未割当", milestone: "プロダクト刷新" },
 ];
 
 const MILESTONES: Milestone[] = [
   { id: 1, title: "Sprint 12", startDate: "2026-06-29", dueDate: "2026-07-19", state: "active" },
   { id: 2, title: "QAゲート", startDate: null, dueDate: "2026-07-10", state: "active" },
+  { id: 3, title: "プロダクト刷新", startDate: "2026-07-15", dueDate: "2026-10-31", state: "active" },
+  { id: 4, title: "基盤移行", startDate: "2026-09-01", dueDate: "2027-01-31", state: "active" },
+  { id: 5, title: "次年度企画", startDate: null, dueDate: "2026-12-18", state: "active" },
 ];
 
 export function mockApiResponse(): ApiResponse {

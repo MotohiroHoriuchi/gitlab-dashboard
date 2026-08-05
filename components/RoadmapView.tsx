@@ -114,12 +114,21 @@ export default function RoadmapView({
         <span style={{ color: rgb(CHECKPOINT_STAR) }}> ★</span>チェックポイント）。左のスパークは残数（実線）と理想線（破線）。行クリックで詳細。
       </p>
 
-      {/* month header aligned to the track column */}
+      {/* month + weekly-date header aligned to the track column */}
       <div style={{ display: "grid", gridTemplateColumns: COL, gap: "0 14px", alignItems: "end", marginBottom: "2px" }}>
         <div />
-        <div style={{ position: "relative", height: fullscreen ? "28px" : "18px" }}>
+        <div
+          role="group"
+          aria-label="日付軸。薄い補助線は月曜日ごとの週区切り"
+          style={{ position: "relative", height: fullscreen ? "52px" : "36px" }}
+        >
           {roadmap.gridLines.map((g, i) => (
             <span key={i} style={monthLabelStyle(g.x, fullscreen)}>{g.label}</span>
+          ))}
+          {roadmap.weekLines.map((w) => (
+            <time key={w.date} dateTime={w.date} style={weekLabelStyle(w.x, fullscreen)}>
+              {w.label}
+            </time>
           ))}
           {roadmap.todayX !== null && <span style={todayLabelStyle(roadmap.todayX, fullscreen)}>本日</span>}
         </div>
@@ -160,7 +169,7 @@ export default function RoadmapView({
                 row={row}
                 fullscreen={fullscreen}
                 todayX={roadmap.todayX}
-                weekStepPct={roadmap.weekStepPct}
+                weekLines={roadmap.weekLines}
                 gridLines={roadmap.gridLines}
                 onChip={(c) => {
                   setChip(c);
@@ -243,7 +252,7 @@ function Track({
   row,
   fullscreen,
   todayX,
-  weekStepPct,
+  weekLines,
   gridLines,
   onChip,
   onTip,
@@ -252,7 +261,7 @@ function Track({
   row: RoadmapRow;
   fullscreen?: boolean;
   todayX: number | null;
-  weekStepPct: number;
+  weekLines: RoadmapVals["weekLines"];
   gridLines: RoadmapVals["gridLines"];
   onChip: (c: ChipState) => void;
   onTip: (e: React.MouseEvent, tip: CalTip) => void;
@@ -263,12 +272,19 @@ function Track({
     height: fullscreen ? "86px" : "56px",
     borderRadius: "6px",
     overflow: "hidden", // clamp any child that rounds past the edge
-    backgroundImage: `repeating-linear-gradient(90deg, ${rgba(T.ink, 0.05)} 0 1px, transparent 1px ${weekStepPct}%)`,
   };
   return (
     <div style={trackStyle}>
+      {weekLines.map((w) => (
+        <div
+          key={w.date}
+          aria-hidden="true"
+          data-week-guide={w.date}
+          style={{ position: "absolute", top: 0, bottom: 0, left: w.x + "%", width: "1px", background: rgba(T.ink, 0.05) }}
+        />
+      ))}
       {gridLines.map((g, i) => (
-        <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.x + "%", width: "1px", background: rgba(T.ink, 0.12) }} />
+        <div aria-hidden="true" key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.x + "%", width: "1px", background: rgba(T.ink, 0.12) }} />
       ))}
       {todayX !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX + "%", width: fullscreen ? "3px" : "2px", background: rgba(T.primary, 0.9), zIndex: 2 }} />}
 
@@ -445,17 +461,21 @@ function ChipPopover({ chip, innerRef, onClose }: { chip: NonNullable<ChipState>
 
 /* ── edge-safe positioning helpers (keep labels inside the track) ── */
 function edgeAnchor(x: number): { left: string; transform: string; textAlign: CSSProperties["textAlign"] } {
-  if (x <= 6) return { left: "0%", transform: "translateX(0)", textAlign: "left" };
-  if (x >= 94) return { left: "100%", transform: "translateX(-100%)", textAlign: "right" };
+  if (x <= 6) return { left: x + "%", transform: "translateX(0)", textAlign: "left" };
+  if (x >= 94) return { left: x + "%", transform: "translateX(-100%)", textAlign: "right" };
   return { left: x + "%", transform: "translateX(-50%)", textAlign: "center" };
 }
 function monthLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.muted), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  return { position: "absolute", top: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.muted), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+}
+function weekLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
+  const a = edgeAnchor(x);
+  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "15px" : "11px", color: rgb(T.mutedSoft), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 }
 function todayLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
-  return { position: "absolute", bottom: 0, left: a.left, transform: a.transform, fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.primary), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  return { position: "absolute", top: 0, left: a.left, transform: a.transform, zIndex: 1, padding: "0 2px", fontSize: fullscreen ? "17px" : "12.5px", fontWeight: 700, color: rgb(T.primary), background: rgb(T.card), fontFamily: MONO, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 }
 function tickLabelStyle(x: number, fullscreen?: boolean): CSSProperties {
   const a = edgeAnchor(x);
