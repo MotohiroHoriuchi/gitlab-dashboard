@@ -294,12 +294,12 @@ export default function Dashboard() {
       {/* ── Content tabs ── */}
       <div style={S("display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap;")}>
         <span style={S(`font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:${rgb(T.mutedSoft)}; font-weight:600;`)}>表示</span>
-        <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
-        <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
-        <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
         <button style={v.panelTabs.schedule.style} onClick={v.panelTabs.schedule.onClick}>大日程</button>
         <button style={v.panelTabs.roadmap.style} onClick={v.panelTabs.roadmap.onClick}>ロードマップ</button>
+        <button style={v.panelTabs.calendar.style} onClick={v.panelTabs.calendar.onClick}>カレンダー</button>
         <button style={v.panelTabs.team.style} onClick={v.panelTabs.team.onClick}>担当者</button>
+        <button style={v.panelTabs.ranking.style} onClick={v.panelTabs.ranking.onClick}>イシュー一覧</button>
+        <button style={v.panelTabs.dist.style} onClick={v.panelTabs.dist.onClick}>Close日数の分布</button>
       </div>
 
       {/* ── Main grid ── */}
