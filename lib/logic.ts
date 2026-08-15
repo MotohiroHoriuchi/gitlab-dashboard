@@ -390,6 +390,7 @@ export interface ExecutiveScheduleIssue {
   id: number;
   title: string;
   dueLabel: string;
+  label: string;
   risk: "overdue" | "soon" | "normal";
   isCheckpoint: boolean;
 }
@@ -406,6 +407,9 @@ export interface ExecutiveScheduleBar {
   continuesAfter: boolean;
   phase: ExecutiveSchedulePhase;
   openCount: number;
+  doneCount: number;
+  totalCount: number;
+  progress: number;
   overdue: number;
   focusTitle: string;
   issues: ExecutiveScheduleIssue[];
@@ -1492,6 +1496,7 @@ export function buildExecutiveSchedule(
             : due === todayIndex
               ? "本日期限"
               : `${fmtMD(due)}期限`,
+      label: it.label.name,
       risk,
       isCheckpoint: it.isCheckpoint,
     };
@@ -1503,15 +1508,20 @@ export function buildExecutiveSchedule(
       return riskRank(a) - riskRank(b) || ad - bd || b.linger - a.linger || a.id - b.id;
     });
 
-  const grouped = new Map<string, Map<string, Issue[]>>();
-  for (const it of open) {
-    const owner = it.assignee || "未割当";
-    let byMilestone = grouped.get(owner);
-    if (!byMilestone) grouped.set(owner, (byMilestone = new Map()));
-    const bucket = byMilestone.get(it.milestone);
-    if (bucket) bucket.push(it);
-    else byMilestone.set(it.milestone, [it]);
-  }
+  const groupIssues = (source: Issue[]): Map<string, Map<string, Issue[]>> => {
+    const result = new Map<string, Map<string, Issue[]>>();
+    for (const it of source) {
+      const owner = it.assignee || "未割当";
+      let byMilestone = result.get(owner);
+      if (!byMilestone) result.set(owner, (byMilestone = new Map()));
+      const bucket = byMilestone.get(it.milestone);
+      if (bucket) bucket.push(it);
+      else byMilestone.set(it.milestone, [it]);
+    }
+    return result;
+  };
+  const grouped = groupIssues(open);
+  const allGrouped = groupIssues(issues);
 
   const lanes: ExecutiveScheduleLane[] = [];
   const unscheduled: ExecutiveUnscheduledGroup[] = [];
@@ -1526,6 +1536,9 @@ export function buildExecutiveSchedule(
     let ownerOpen = 0;
 
     for (const [title, memberIssues] of byMilestone) {
+      const allMemberIssues = allGrouped.get(name)?.get(title) ?? memberIssues;
+      const doneCount = allMemberIssues.filter((it) => !it.isOpen).length;
+      const totalCount = allMemberIssues.length;
       ownerOpen += memberIssues.length;
       ownerOverdue += memberIssues.filter((it) => riskOf(it) === "overdue").length;
       allMilestones.add(title);
@@ -1575,6 +1588,9 @@ export function buildExecutiveSchedule(
         continuesAfter: milestoneEnd > end,
         phase,
         openCount: memberIssues.length,
+        doneCount,
+        totalCount,
+        progress: totalCount ? Math.round((doneCount / totalCount) * 100) : 0,
         overdue: refs.filter((it) => it.risk === "overdue").length,
         focusTitle: ordered[0]?.title ?? "",
         issues: refs,

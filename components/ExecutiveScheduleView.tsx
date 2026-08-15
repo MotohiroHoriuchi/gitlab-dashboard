@@ -9,15 +9,12 @@ import {
   rgb,
   rgba,
   seg,
-  type ExecutiveScheduleBar,
-  type ExecutiveScheduleIssue,
   type ExecutiveScheduleVals,
 } from "@/lib/logic";
+import ExecutiveScheduleWorkspace from "@/components/ExecutiveScheduleWorkspace";
 
 const MIN_RANGE_DAYS = 28;
 const MAX_RANGE_DAYS = 366;
-const OWNER_COL = 220;
-const TRACK_MIN = 760;
 
 const formatDay = (day: number): string => new Date(day * DAY).toISOString().slice(0, 10);
 const parseDay = (value: string): number | null => {
@@ -28,37 +25,9 @@ const parseDay = (value: string): number | null => {
   return formatDay(day) === value ? day : null;
 };
 
-function issueTone(issue: ExecutiveScheduleIssue): string {
-  return issue.risk === "overdue" ? T.err : issue.risk === "soon" ? T.warn : T.muted;
-}
-
-function barColors(bar: ExecutiveScheduleBar): CSSProperties {
-  if (bar.phase === "overdue") {
-    return {
-      color: rgb(T.err),
-      borderColor: rgba(T.err, 0.65),
-      background: rgba(T.err, 0.09),
-    };
-  }
-  if (bar.phase === "active") {
-    return {
-      color: rgb(T.primary),
-      borderColor: rgba(T.primary, 0.65),
-      background: rgba(T.primary, 0.14),
-    };
-  }
-  return {
-    color: rgb(T.body),
-    borderColor: rgba(T.primary, 0.32),
-    background: rgb(T.card),
-  };
-}
-
-const detailId = (key: string): string =>
-  "schedule-detail-" + Array.from(key, (char) => char.codePointAt(0)!.toString(36)).join("-");
-
 export default function ExecutiveScheduleView({
   schedule,
+  repo,
   startDay,
   endDay,
   defaultStart,
@@ -70,6 +39,7 @@ export default function ExecutiveScheduleView({
   onClearFilters,
 }: {
   schedule: ExecutiveScheduleVals;
+  repo: string;
   startDay: number;
   endDay: number;
   defaultStart: number;
@@ -83,7 +53,6 @@ export default function ExecutiveScheduleView({
   const [draftStart, setDraftStart] = useState(formatDay(startDay));
   const [draftEnd, setDraftEnd] = useState(formatDay(endDay));
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
     setDraftStart(formatDay(startDay));
@@ -94,14 +63,11 @@ export default function ExecutiveScheduleView({
   useEffect(() => {
     if (!fullscreen || !onExitFull) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (selected) setSelected(null);
-        else onExitFull();
-      }
+      if (event.key === "Escape") onExitFull();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [fullscreen, onExitFull, selected]);
+  }, [fullscreen, onExitFull]);
 
   const applyRange = () => {
     const nextStart = parseDay(draftStart);
@@ -120,17 +86,14 @@ export default function ExecutiveScheduleView({
       return;
     }
     setError(null);
-    setSelected(null);
     onRangeChange(nextStart, nextEnd);
   };
   const moveRange = (direction: -1 | 1) => {
     const span = endDay - startDay + 1;
     onRangeChange(startDay + span * direction, endDay + span * direction);
-    setSelected(null);
   };
   const resetRange = () => {
     onRangeChange(defaultStart, defaultEnd);
-    setSelected(null);
   };
 
   const control = (style: CSSProperties): CSSProperties =>
@@ -227,31 +190,7 @@ export default function ExecutiveScheduleView({
       )}
 
       {schedule.lanes.length ? (
-        <div style={{ overflowX: "auto", border: "1px solid " + rgb(T.hairline), borderRadius: "12px" }}>
-          <div style={{ minWidth: OWNER_COL + TRACK_MIN }}>
-            <div style={{ display: "grid", gridTemplateColumns: `${OWNER_COL}px minmax(${TRACK_MIN}px,1fr)`, minHeight: fullscreen ? "58px" : "48px", borderBottom: "1px solid " + rgb(T.hairline), background: rgb(T.canvas) }}>
-              <div style={{ display: "flex", alignItems: "flex-end", padding: "0 14px 10px", color: rgb(T.muted), fontSize: fullscreen ? "14px" : "11.5px", fontWeight: 700 }}>担当者 / 現在の仕事</div>
-              <Axis schedule={schedule} fullscreen={fullscreen} />
-            </div>
-            {schedule.lanes.map((lane) => {
-              const laneHeight = (fullscreen ? 22 : 17) + lane.sublaneCount * (fullscreen ? 50 : 42);
-              return (
-                <div key={lane.name}>
-                  <div style={{ display: "grid", gridTemplateColumns: `${OWNER_COL}px minmax(${TRACK_MIN}px,1fr)`, minHeight: laneHeight, borderBottom: "1px solid " + rgb(T.hairline) }}>
-                    <div style={{ padding: fullscreen ? "15px 16px" : "12px 14px", borderRight: "1px solid " + rgb(T.hairline), background: rgb(T.card) }}>
-                      <div style={{ overflow: "hidden", color: rgb(T.ink), fontSize: fullscreen ? "19px" : "15px", fontWeight: 700, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lane.name}</div>
-                      <div style={{ marginTop: "5px", color: lane.overdue ? rgb(T.err) : rgb(T.muted), fontFamily: MONO, fontSize: fullscreen ? "13.5px" : "11px", fontVariantNumeric: "tabular-nums" }}>
-                        Open {lane.open} · 大日程 {lane.milestoneCount}{lane.overdue ? ` · 超過 ${lane.overdue}` : ""}
-                      </div>
-                    </div>
-                    <LaneTrack laneHeight={laneHeight} schedule={schedule} bars={lane.bars} selected={selected} onSelect={setSelected} fullscreen={fullscreen} />
-                  </div>
-                  {lane.bars.map((bar) => selected === bar.key && <BarDetail key={bar.key} bar={bar} owner={lane.name} fullscreen={fullscreen} />)}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <ExecutiveScheduleWorkspace schedule={schedule} repo={repo} fullscreen={fullscreen} />
       ) : (
         <div style={{ padding: "34px 20px", border: "1px solid " + rgb(T.hairline), borderRadius: "12px", textAlign: "center", background: rgb(T.canvas) }}>
           <p style={{ margin: 0, color: rgb(T.muted), fontSize: fullscreen ? "16px" : "13px" }}>この期間に表示できる担当者別マイルストーンがありません。</p>
@@ -281,64 +220,5 @@ export default function ExecutiveScheduleView({
         </section>
       )}
     </section>
-  );
-}
-
-function Axis({ schedule, fullscreen }: { schedule: ExecutiveScheduleVals; fullscreen?: boolean }) {
-  return (
-    <div aria-label="日付軸" style={{ position: "relative", minHeight: fullscreen ? "58px" : "48px" }}>
-      {schedule.axisMarks.map((mark) => (
-        <time key={`${mark.kind}:${mark.date}`} dateTime={mark.date} style={{ position: "absolute", left: mark.x + "%", top: mark.kind === "month" ? (fullscreen ? "9px" : "7px") : undefined, bottom: mark.kind === "week" ? (fullscreen ? "7px" : "5px") : undefined, transform: mark.x > 94 ? "translateX(-100%)" : mark.x < 4 ? "none" : "translateX(-50%)", color: mark.kind === "month" ? rgb(T.body) : rgb(T.muted), fontFamily: MONO, fontSize: mark.kind === "month" ? (fullscreen ? "15px" : "12px") : (fullscreen ? "13px" : "11px"), fontWeight: mark.kind === "month" ? 700 : 500, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-          {mark.label}
-        </time>
-      ))}
-      {schedule.todayX !== null && <span style={{ position: "absolute", left: schedule.todayX + "%", top: fullscreen ? "9px" : "7px", transform: "translateX(-50%)", padding: "1px 3px", color: rgb(T.primary), background: rgb(T.canvas), fontSize: fullscreen ? "14px" : "11.5px", fontWeight: 700 }}>本日</span>}
-    </div>
-  );
-}
-
-function LaneTrack({ laneHeight, schedule, bars, selected, onSelect, fullscreen }: { laneHeight: number; schedule: ExecutiveScheduleVals; bars: ExecutiveScheduleBar[]; selected: string | null; onSelect: (key: string | null) => void; fullscreen?: boolean }) {
-  return (
-    <div style={{ position: "relative", minHeight: laneHeight, overflow: "hidden", background: rgb(T.card) }}>
-      {schedule.axisMarks.map((mark) => <span aria-hidden="true" key={`${mark.kind}:${mark.date}`} style={{ position: "absolute", insetBlock: 0, left: mark.x + "%", width: "1px", background: mark.kind === "month" ? rgba(T.ink, 0.12) : rgba(T.ink, 0.045) }} />)}
-      {schedule.todayX !== null && <span aria-hidden="true" style={{ position: "absolute", insetBlock: 0, left: schedule.todayX + "%", width: "2px", background: rgba(T.primary, 0.75), zIndex: 1 }} />}
-      {bars.map((bar) => (
-        <button key={bar.key} type="button" aria-expanded={selected === bar.key} aria-controls={detailId(bar.key)} onClick={() => onSelect(selected === bar.key ? null : bar.key)} style={{ position: "absolute", top: (fullscreen ? 13 : 10) + bar.sublane * (fullscreen ? 50 : 42), left: bar.left + "%", width: bar.width + "%", minWidth: "20px", height: fullscreen ? "38px" : "32px", overflow: "hidden", padding: fullscreen ? "4px 10px" : "3px 8px", border: "1px solid", borderRadius: "6px", cursor: "pointer", textAlign: "left", fontFamily: SANS, zIndex: selected === bar.key ? 2 : 1, ...barColors(bar) }} title={`${bar.title} · Open ${bar.openCount}件 · ${formatDay(bar.startDay)}〜${formatDay(bar.endDay)}`}>
-          <span style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
-            {bar.continuesBefore && <span aria-hidden="true">‹</span>}
-            <strong style={{ minWidth: 0, overflow: "hidden", fontSize: fullscreen ? "14px" : "12px", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bar.title}</strong>
-            <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: fullscreen ? "12px" : "10.5px", fontVariantNumeric: "tabular-nums" }}>{bar.openCount}</span>
-            {bar.continuesAfter && <span aria-hidden="true">›</span>}
-          </span>
-          {bar.width >= 15 && <span style={{ display: "block", overflow: "hidden", marginTop: "1px", fontSize: fullscreen ? "11.5px" : "10px", opacity: 0.82, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bar.focusTitle}</span>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function BarDetail({ bar, owner, fullscreen }: { bar: ExecutiveScheduleBar; owner: string; fullscreen?: boolean }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: `${OWNER_COL}px minmax(0,1fr)`, borderBottom: "1px solid " + rgb(T.hairline), background: rgba(T.primary, 0.045) }}>
-      <div style={{ padding: "13px 14px", borderRight: "1px solid " + rgb(T.hairline), color: rgb(T.muted), fontSize: fullscreen ? "13px" : "11px" }}>
-        {owner}<br />{formatDay(bar.startDay)} 〜 {formatDay(bar.endDay)}
-      </div>
-      <div id={detailId(bar.key)} style={{ padding: fullscreen ? "15px 18px" : "12px 15px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline" }}>
-          <h3 style={{ margin: 0, color: rgb(T.ink), fontSize: fullscreen ? "18px" : "14px", textWrap: "balance" }}>{bar.title}の進行中イシュー</h3>
-          <span style={{ color: rgb(T.muted), fontFamily: MONO, fontSize: fullscreen ? "13px" : "11px", fontVariantNumeric: "tabular-nums" }}>{bar.openCount}件</span>
-        </div>
-        <ul style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: "6px 14px", margin: "9px 0 0", padding: 0, listStyle: "none" }}>
-          {bar.issues.map((issue) => (
-            <li key={issue.id} style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, padding: "6px 0", borderTop: "1px solid " + rgb(T.hairline) }}>
-              <span style={{ flex: "0 0 auto", color: rgb(T.primary), fontFamily: MONO, fontSize: fullscreen ? "13px" : "11px", fontWeight: 700 }}>#{issue.id}</span>
-              {issue.isCheckpoint && <span aria-label="チェックポイント" style={{ color: rgb(T.warn) }}>★</span>}
-              <span style={{ minWidth: 0, overflow: "hidden", color: rgb(T.body), fontSize: fullscreen ? "14px" : "12px", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.title}</span>
-              <span style={{ flex: "0 0 auto", marginLeft: "auto", color: rgb(issueTone(issue)), fontSize: fullscreen ? "12px" : "10.5px" }}>{issue.dueLabel}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
   );
 }

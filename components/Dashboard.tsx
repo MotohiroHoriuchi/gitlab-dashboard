@@ -532,6 +532,7 @@ export default function Dashboard() {
             />
             <ExecutiveScheduleView
               schedule={v.schedule}
+              repo={v.repo}
               startDay={st.scheduleStart}
               endDay={st.scheduleEnd}
               defaultStart={defaults.scheduleStart}

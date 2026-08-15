@@ -1,0 +1,472 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(620px, 1fr) 360px;
+  gap: 12px;
+  align-items: start;
+}
+
+.timelinePanel,
+.inspector {
+  min-width: 0;
+  border: 1px solid rgb(var(--hairline, 220 226 231));
+  border-radius: 12px;
+  background: rgb(var(--card, 255 255 255));
+}
+
+.timelineScroll {
+  overflow-x: auto;
+  border-radius: inherit;
+}
+
+.timelineInner {
+  min-width: 760px;
+}
+
+.axisRow,
+.laneRow {
+  display: grid;
+  grid-template-columns: 150px minmax(610px, 1fr);
+}
+
+.axisRow {
+  min-height: 64px;
+  border-bottom: 1px solid rgb(var(--hairline, 220 226 231));
+  background: rgb(var(--canvas, 247 248 250));
+}
+
+.ownerHeading {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 12px 9px;
+  color: rgb(var(--muted, 95 107 118));
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.axis {
+  position: relative;
+  min-height: 64px;
+}
+
+.todayLabel,
+.monthMark,
+.weekMark {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.todayLabel {
+  top: 3px;
+  z-index: 2;
+  padding: 1px 4px;
+  color: rgb(var(--primary, 0 108 174));
+  background: rgb(var(--canvas, 247 248 250));
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.monthMark {
+  top: 24px;
+  color: rgb(var(--body, 47 56 64));
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.weekMark {
+  bottom: 4px;
+  color: rgb(var(--muted, 95 107 118));
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.laneRow {
+  min-height: var(--lane-height);
+  border-bottom: 1px solid rgb(var(--hairline, 220 226 231));
+}
+
+.laneRow:last-child {
+  border-bottom: 0;
+}
+
+.ownerCell {
+  padding: 13px 12px;
+  border-right: 1px solid rgb(var(--hairline, 220 226 231));
+}
+
+.ownerCell strong {
+  display: block;
+  overflow: hidden;
+  color: rgb(var(--ink, 20 28 35));
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ownerCell span {
+  display: block;
+  margin-top: 5px;
+  color: rgb(var(--muted, 95 107 118));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ownerCell .ownerDanger {
+  color: rgb(var(--err, 197 48 48));
+}
+
+.track {
+  position: relative;
+  min-height: var(--lane-height);
+  overflow: hidden;
+}
+
+.monthGrid,
+.weekGrid,
+.todayLine {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+}
+
+.monthGrid { background: rgb(20 28 35 / 12%); }
+.weekGrid { background: rgb(20 28 35 / 4.5%); }
+.todayLine {
+  z-index: 1;
+  width: 2px;
+  background: rgb(var(--primary, 0 108 174) / 32%);
+}
+
+.milestoneBar {
+  position: absolute;
+  top: var(--bar-top);
+  left: var(--bar-left);
+  z-index: 2;
+  width: var(--bar-width);
+  min-width: 78px;
+  height: 52px;
+  overflow: hidden;
+  padding: 6px 8px 5px;
+  border: 1px solid var(--bar-color);
+  border-left-width: 5px;
+  border-radius: 8px;
+  color: var(--bar-color);
+  background: var(--bar-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.milestoneBar[aria-pressed="true"] {
+  outline: 2px solid rgb(var(--primary, 0 108 174));
+  outline-offset: 2px;
+}
+
+.milestoneBar:focus-visible,
+.issueLink:focus-visible,
+.openAll:focus-visible {
+  outline: 3px solid rgb(var(--primary, 0 108 174));
+  outline-offset: 2px;
+}
+
+.barTopline,
+.barProgressRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.barTopline { gap: 5px; }
+
+.barTitle {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.15;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.barCount {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.barProgressRow {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  left: 8px;
+  gap: 6px;
+}
+
+.barProgress {
+  flex: 1;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid var(--bar-color);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 72%);
+}
+
+.barProgress > span {
+  display: block;
+  width: var(--bar-progress);
+  height: 100%;
+  background: var(--bar-color);
+}
+
+.barPercent {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector {
+  padding: 18px;
+}
+
+.inspectorHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0;
+  color: rgb(var(--primary, 0 108 174));
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.inspector h3 {
+  margin: 5px 0 0;
+  color: rgb(var(--ink, 20 28 35));
+  font-size: 19px;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.milestoneDates {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  margin: 1px 0 0;
+  color: rgb(var(--ink, 20 28 35));
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 24px;
+}
+
+.status {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status > span:first-child,
+.issueState {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.status > span:first-child {
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+}
+
+.ownerName {
+  margin-left: 4px;
+  color: rgb(var(--muted, 95 107 118));
+  font-weight: 600;
+}
+
+.tone_danger { color: rgb(var(--err, 197 48 48)); }
+.tone_warning { color: rgb(var(--warn, 169 101 0)); }
+.tone_success { color: rgb(var(--ok, 22 127 84)); }
+.tone_neutral { color: rgb(var(--muted, 95 107 118)); }
+
+.remaining {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  margin: 0;
+  color: rgb(var(--ink, 20 28 35));
+}
+
+.remaining strong {
+  color: rgb(var(--primary, 0 108 174));
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.remaining span {
+  font-size: 12.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.inspectorProgressRow {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.inspectorProgress {
+  flex: 1;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(var(--hairline, 220 226 231));
+}
+
+.inspectorProgress > span {
+  display: block;
+  width: var(--detail-progress);
+  height: 100%;
+  background: rgb(var(--primary, 0 108 174));
+}
+
+.inspectorProgressRow > strong {
+  min-width: 38px;
+  color: rgb(var(--body, 47 56 64));
+  font-size: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.issueList {
+  display: grid;
+  gap: 7px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issueLink {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 20px;
+  gap: 9px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid rgb(var(--hairline, 220 226 231));
+  border-radius: 9px;
+  color: rgb(var(--ink, 20 28 35));
+  text-decoration: none;
+}
+
+.issueLink:hover {
+  border-color: rgb(var(--primary, 0 108 174) / 55%);
+  background: rgb(var(--canvas, 247 248 250));
+}
+
+.issueState {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.issueCopy,
+.issueTitle,
+.issueMeta {
+  display: block;
+  min-width: 0;
+}
+
+.issueTitle {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issueTitle strong {
+  color: rgb(var(--primary, 0 108 174));
+}
+
+.issueMeta {
+  overflow: hidden;
+  margin-top: 3px;
+  color: rgb(var(--muted, 95 107 118));
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openIcon {
+  color: rgb(var(--primary, 0 108 174));
+  font-size: 19px;
+  line-height: 1;
+}
+
+.openAll {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 0 14px;
+  border: 1px solid rgb(var(--primary, 0 108 174));
+  border-radius: 9px;
+  color: rgb(255 255 255);
+  background: rgb(var(--primary, 0 108 174));
+  font-size: 12.5px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.fullscreen {
+  grid-template-columns: minmax(760px, 1fr) 420px;
+}
+
+.fullscreen .timelineInner { min-width: 900px; }
+.fullscreen .axisRow,
+.fullscreen .laneRow { grid-template-columns: 180px minmax(720px, 1fr); }
+.fullscreen .ownerCell strong { font-size: 16px; }
+.fullscreen .inspector { padding: 22px; }
+.fullscreen .inspector h3 { font-size: 22px; }
+.fullscreen .issueTitle { font-size: 14px; }
+.fullscreen .issueMeta { font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .workspace,
+  .fullscreen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inspector {
+    position: static;
+  }
+}

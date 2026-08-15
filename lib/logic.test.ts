@@ -936,7 +936,11 @@ describe("buildExecutiveSchedule", () => {
     expect(result.lanes.map((lane) => lane.name).sort()).toEqual(["Alice", "Bob"]);
     expect(result.open).toBe(2);
     expect(result.lanes.every((lane) => lane.bars[0].title === "Release")).toBe(true);
-    expect(result.lanes.find((lane) => lane.name === "Alice")!.bars[0].issues.map((it) => it.id)).toEqual([1]);
+    const aliceRelease = result.lanes.find((lane) => lane.name === "Alice")!.bars[0];
+    expect(aliceRelease.issues.map((it) => it.id)).toEqual([1]);
+    expect(aliceRelease.totalCount).toBe(2);
+    expect(aliceRelease.doneCount).toBe(1);
+    expect(aliceRelease.progress).toBe(50);
   });
 
   it("packs overlapping milestones into sublanes and clips range-crossing bars", () => {
