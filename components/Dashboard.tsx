@@ -533,6 +533,7 @@ export default function Dashboard() {
             <ExecutiveScheduleView
               schedule={v.schedule}
               repo={v.repo}
+              gitlabProtocol={data.gitlabProtocol}
               startDay={st.scheduleStart}
               endDay={st.scheduleEnd}
               defaultStart={defaults.scheduleStart}

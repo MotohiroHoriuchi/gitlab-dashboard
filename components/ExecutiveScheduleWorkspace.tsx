@@ -10,6 +10,8 @@ import {
   type ExecutiveScheduleIssue,
   type ExecutiveScheduleVals,
 } from "@/lib/logic";
+import { gitLabProjectUrl } from "@/lib/gitlabLinks";
+import type { GitLabProtocol } from "@/lib/types";
 import styles from "./ExecutiveScheduleWorkspace.module.css";
 
 type Tone = "danger" | "warning" | "success" | "neutral";
@@ -17,11 +19,6 @@ type Tone = "danger" | "warning" | "success" | "neutral";
 const dayText = (day: number): string => {
   const date = new Date(day * DAY);
   return `${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
-};
-
-const projectUrl = (repo: string): string => {
-  const clean = repo.replace(/（[^）]*）/g, "").trim().replace(/\/$/, "");
-  return /^https?:\/\//.test(clean) ? clean : `https://${clean}`;
 };
 
 const barTone = (bar: ExecutiveScheduleBar): { color: string; soft: string } => {
@@ -53,10 +50,12 @@ const issueStatus = (issue: ExecutiveScheduleIssue): { label: string; symbol: st
 export default function ExecutiveScheduleWorkspace({
   schedule,
   repo,
+  defaultProtocol,
   fullscreen,
 }: {
   schedule: ExecutiveScheduleVals;
   repo: string;
+  defaultProtocol: GitLabProtocol;
   fullscreen?: boolean;
 }) {
   const bars = useMemo(
@@ -64,9 +63,10 @@ export default function ExecutiveScheduleWorkspace({
     [schedule.lanes],
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [protocol, setProtocol] = useState<GitLabProtocol>(defaultProtocol);
   const selection = bars.find(({ bar }) => bar.key === selectedKey) ?? bars[0] ?? null;
   const activeKey = selection?.bar.key ?? null;
-  const baseUrl = projectUrl(repo);
+  const baseUrl = gitLabProjectUrl(repo, protocol);
   const theme = {
     "--canvas": T.canvas,
     "--card": T.card,
@@ -128,7 +128,13 @@ export default function ExecutiveScheduleWorkspace({
       </section>
 
       {selection && (
-        <Inspector bar={selection.bar} owner={selection.owner} baseUrl={baseUrl} />
+        <Inspector
+          bar={selection.bar}
+          owner={selection.owner}
+          baseUrl={baseUrl}
+          protocol={protocol}
+          onProtocolChange={setProtocol}
+        />
       )}
     </div>
   );
@@ -210,7 +216,19 @@ function MilestoneBar({
   );
 }
 
-function Inspector({ bar, owner, baseUrl }: { bar: ExecutiveScheduleBar; owner: string; baseUrl: string }) {
+function Inspector({
+  bar,
+  owner,
+  baseUrl,
+  protocol,
+  onProtocolChange,
+}: {
+  bar: ExecutiveScheduleBar;
+  owner: string;
+  baseUrl: string;
+  protocol: GitLabProtocol;
+  onProtocolChange: (protocol: GitLabProtocol) => void;
+}) {
   const status = statusOf(bar);
   return (
     <aside id="executive-milestone-inspector" className={styles.inspector} aria-label="選択中のマイルストーン詳細">
@@ -265,6 +283,20 @@ function Inspector({ bar, owner, baseUrl }: { bar: ExecutiveScheduleBar; owner: 
           );
         })}
       </ul>
+
+      <div className={styles.linkActions}>
+        <label className={styles.protocolField}>
+          <span>GitLabリンク</span>
+          <select
+            value={protocol}
+            onChange={(event) => onProtocolChange(event.currentTarget.value as GitLabProtocol)}
+          >
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+          </select>
+        </label>
+        <span className={styles.protocolHint}>{baseUrl}</span>
+      </div>
 
       <a
         className={styles.openAll}

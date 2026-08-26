@@ -52,8 +52,11 @@ export interface Milestone {
   state: string; // "active" | "closed"
 }
 
+export type GitLabProtocol = "http" | "https";
+
 export interface ApiResponse {
   repo: string; // "host/group/project" — canonical path, shown as the subtitle
+  gitlabProtocol: GitLabProtocol; // GITLAB_BASE_URLのプロトコル。外部リンクの初期値に使う
   project: string; // GitLab display name ("Group / Project") — shown as the title
   asOf: string; // YYYY-MM-DD
   fetchedAt: string; // full ISO — when the server actually fetched from GitLab

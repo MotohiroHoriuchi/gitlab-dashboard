@@ -116,7 +116,7 @@ Browser ─▶ Next.js(:48273)
 
 | 変数 | 必須 | 例 / 既定 | 説明 |
 |---|---|---|---|
-| `GITLAB_BASE_URL` | ✔ | `https://gitlab.com` | GitLab の URL（セルフホスト可） |
+| `GITLAB_BASE_URL` | ✔ | `https://gitlab.com` | GitLab の URL（セルフホスト可、`http://` / `https://` 対応） |
 | `GITLAB_PROJECT_ID` | ✔ | `group/project` or `278964` | プロジェクト（パス or 数値 ID） |
 | `GITLAB_TOKEN` | ✔ | `glpat-…` | Personal Access Token（`read_api` スコープ） |
 | `GITLAB_MAX_ISSUES` | | `2000` | 取得上限（ページング保護） |

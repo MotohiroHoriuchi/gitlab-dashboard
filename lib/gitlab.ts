@@ -405,6 +405,7 @@ async function fetchFresh(env?: Env): Promise<ApiResponse> {
   ]);
   return {
     repo: meta.repo,
+    gitlabProtocol: new URL(cfg.baseUrl).protocol === "http:" ? "http" : "https",
     project: meta.project,
     asOf: new Date(now).toISOString().slice(0, 10),
     fetchedAt: new Date(now).toISOString(),

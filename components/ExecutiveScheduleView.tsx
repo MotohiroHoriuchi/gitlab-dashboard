@@ -12,6 +12,7 @@ import {
   type ExecutiveScheduleVals,
 } from "@/lib/logic";
 import ExecutiveScheduleWorkspace from "@/components/ExecutiveScheduleWorkspace";
+import type { GitLabProtocol } from "@/lib/types";
 
 const MIN_RANGE_DAYS = 28;
 const MAX_RANGE_DAYS = 366;
@@ -28,6 +29,7 @@ const parseDay = (value: string): number | null => {
 export default function ExecutiveScheduleView({
   schedule,
   repo,
+  gitlabProtocol,
   startDay,
   endDay,
   defaultStart,
@@ -40,6 +42,7 @@ export default function ExecutiveScheduleView({
 }: {
   schedule: ExecutiveScheduleVals;
   repo: string;
+  gitlabProtocol: GitLabProtocol;
   startDay: number;
   endDay: number;
   defaultStart: number;
@@ -190,7 +193,12 @@ export default function ExecutiveScheduleView({
       )}
 
       {schedule.lanes.length ? (
-        <ExecutiveScheduleWorkspace schedule={schedule} repo={repo} fullscreen={fullscreen} />
+        <ExecutiveScheduleWorkspace
+          schedule={schedule}
+          repo={repo}
+          defaultProtocol={gitlabProtocol}
+          fullscreen={fullscreen}
+        />
       ) : (
         <div style={{ padding: "34px 20px", border: "1px solid " + rgb(T.hairline), borderRadius: "12px", textAlign: "center", background: rgb(T.canvas) }}>
           <p style={{ margin: 0, color: rgb(T.muted), fontSize: fullscreen ? "16px" : "13px" }}>この期間に表示できる担当者別マイルストーンがありません。</p>
