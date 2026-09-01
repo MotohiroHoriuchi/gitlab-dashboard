@@ -391,6 +391,7 @@ export interface ExecutiveScheduleIssue {
   title: string;
   dueLabel: string;
   label: string;
+  isOpen: boolean;
   risk: "overdue" | "soon" | "normal";
   isCheckpoint: boolean;
 }
@@ -1448,9 +1449,10 @@ export function buildTeamOverview(issues: Issue[], todayIndex: number): TeamOver
   };
 }
 
-/** Management-scale calendar: Open work is grouped by assignee, then by its
- * official GitLab milestone. Milestone dates are never inferred from issue
- * history here; incomplete plans stay visible in the unscheduled section. */
+/** Management-scale calendar: all work is grouped by assignee, then by its
+ * official GitLab milestone. Completed milestones stay visible at 100%; closed
+ * milestones without issues use the synthetic "担当者なし" lane. Milestone
+ * dates are never inferred from issue history here. */
 export function buildExecutiveSchedule(
   issues: Issue[],
   milestones: Milestone[],
@@ -1472,6 +1474,7 @@ export function buildExecutiveSchedule(
     return Number.isNaN(parsed) ? null : parsed;
   };
   const riskOf = (it: Issue): ExecutiveScheduleIssue["risk"] => {
+    if (!it.isOpen) return "normal";
     const due = dueDay(it);
     if (due === null) return "normal";
     if (due < todayIndex) return "overdue";
@@ -1485,11 +1488,16 @@ export function buildExecutiveSchedule(
   const toIssue = (it: Issue): ExecutiveScheduleIssue => {
     const due = dueDay(it);
     const risk = riskOf(it);
+    const closedDay = it.closedAt ? dayIndex(it.closedAt.slice(0, 10)) : NaN;
     return {
       id: it.id,
       title: it.title,
       dueLabel:
-        due === null
+        !it.isOpen
+          ? Number.isFinite(closedDay)
+            ? `${fmtMD(closedDay)}完了`
+            : "完了"
+          : due === null
           ? "期限なし"
           : risk === "overdue"
             ? `${todayIndex - due}日超過`
@@ -1497,6 +1505,7 @@ export function buildExecutiveSchedule(
               ? "本日期限"
               : `${fmtMD(due)}期限`,
       label: it.label.name,
+      isOpen: it.isOpen,
       risk,
       isCheckpoint: it.isCheckpoint,
     };
@@ -1520,8 +1529,14 @@ export function buildExecutiveSchedule(
     }
     return result;
   };
-  const grouped = groupIssues(open);
-  const allGrouped = groupIssues(issues);
+  const grouped = groupIssues(issues);
+  const milestonesWithIssues = new Set(issues.map((it) => it.milestone));
+  for (const milestone of milestones) {
+    if (milestone.state !== "closed" || milestonesWithIssues.has(milestone.title)) continue;
+    let completed = grouped.get("担当者なし");
+    if (!completed) grouped.set("担当者なし", (completed = new Map()));
+    completed.set(milestone.title, []);
+  }
 
   const lanes: ExecutiveScheduleLane[] = [];
   const unscheduled: ExecutiveUnscheduledGroup[] = [];
@@ -1535,14 +1550,14 @@ export function buildExecutiveSchedule(
     let ownerOverdue = 0;
     let ownerOpen = 0;
 
-    for (const [title, memberIssues] of byMilestone) {
-      const allMemberIssues = allGrouped.get(name)?.get(title) ?? memberIssues;
+    for (const [title, allMemberIssues] of byMilestone) {
+      const memberIssues = allMemberIssues.filter((it) => it.isOpen);
       const doneCount = allMemberIssues.filter((it) => !it.isOpen).length;
       const totalCount = allMemberIssues.length;
       ownerOpen += memberIssues.length;
       ownerOverdue += memberIssues.filter((it) => riskOf(it) === "overdue").length;
       allMilestones.add(title);
-      const ordered = orderIssues(memberIssues);
+      const ordered = orderIssues(memberIssues.length ? memberIssues : allMemberIssues);
       const refs = ordered.map(toIssue);
       const milestone = milestoneByTitle.get(title);
       const milestoneStart = milestone?.startDate ? dayIndex(milestone.startDate) : NaN;
@@ -1590,7 +1605,7 @@ export function buildExecutiveSchedule(
         openCount: memberIssues.length,
         doneCount,
         totalCount,
-        progress: totalCount ? Math.round((doneCount / totalCount) * 100) : 0,
+        progress: totalCount ? Math.round((doneCount / totalCount) * 100) : 100,
         overdue: refs.filter((it) => it.risk === "overdue").length,
         focusTitle: ordered[0]?.title ?? "",
         issues: refs,
@@ -1666,12 +1681,12 @@ export function buildExecutiveSchedule(
     rangeDays,
     rangeLabel: `${fmtYMD(start)} 〜 ${fmtYMD(end)}`,
     open: open.length,
-    people: grouped.size,
+    people: lanes.length,
     milestones: milestoneCount,
     overdue,
     outOfRange: outOfRangeMilestones.size,
     empty: lanes.length === 0 && unscheduled.length === 0,
-    filterSummary: `稼働 ${grouped.size} 名 / 進行中 ${open.length} 件 / マイルストーン ${milestoneCount} 件`,
+    filterSummary: `表示 ${lanes.length} レーン / 進行中 ${open.length} 件 / マイルストーン ${milestoneCount} 件`,
   };
 }
 

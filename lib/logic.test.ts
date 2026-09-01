@@ -955,6 +955,42 @@ describe("buildExecutiveSchedule", () => {
     expect(lane.bars.every((bar) => bar.continuesAfter)).toBe(true);
   });
 
+  it("shows completed milestones without Open issues, including an empty closed milestone", () => {
+    const completedMilestones: Milestone[] = [
+      ...milestones,
+      { id: 5, title: "Completed", startDate: "2026-06-10", dueDate: "2026-06-30", state: "closed" },
+      { id: 6, title: "Empty completed", startDate: "2026-07-10", dueDate: "2026-07-20", state: "closed" },
+    ];
+    const issues = [
+      mkIssue({
+        id: 4,
+        assignee: "Alice",
+        milestone: "Completed",
+        isOpen: false,
+        closedAt: "2026-06-29",
+      }),
+    ];
+    const result = buildExecutiveSchedule(
+      issues,
+      completedMilestones,
+      TODAY,
+      dayIndex("2026-06-01"),
+      dayIndex("2026-12-01"),
+    );
+    const completed = result.lanes.find((lane) => lane.name === "Alice")!.bars[0];
+    expect(completed.openCount).toBe(0);
+    expect(completed.doneCount).toBe(1);
+    expect(completed.totalCount).toBe(1);
+    expect(completed.progress).toBe(100);
+    expect(completed.issues.map((issue) => [issue.id, issue.isOpen])).toEqual([[4, false]]);
+
+    const empty = result.lanes.find((lane) => lane.name === "担当者なし")!.bars[0];
+    expect(empty.title).toBe("Empty completed");
+    expect(empty.openCount).toBe(0);
+    expect(empty.totalCount).toBe(0);
+    expect(empty.progress).toBe(100);
+  });
+
   it("separates incomplete plans and counts scheduled milestones outside the range", () => {
     const issues = [
       mkIssue({ id: 1, assignee: "Alice", milestone: "No plan" }),

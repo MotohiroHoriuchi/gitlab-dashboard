@@ -56,6 +56,13 @@ export default function ExecutiveScheduleView({
   const [draftStart, setDraftStart] = useState(formatDay(startDay));
   const [draftEnd, setDraftEnd] = useState(formatDay(endDay));
   const [error, setError] = useState<string | null>(null);
+  const [openOnly, setOpenOnly] = useState(false);
+
+  const visibleUnscheduled = openOnly
+    ? schedule.unscheduled
+        .map((group) => ({ ...group, items: group.items.filter((item) => item.openCount > 0) }))
+        .filter((group) => group.items.length > 0)
+    : schedule.unscheduled;
 
   useEffect(() => {
     setDraftStart(formatDay(startDay));
@@ -136,7 +143,7 @@ export default function ExecutiveScheduleView({
             誰が、どの大日程を動かしているか
           </h2>
           <p style={{ margin: "7px 0 0", color: rgb(T.muted), fontSize: fullscreen ? "16px" : "13px", lineHeight: 1.55, textWrap: "pretty" }}>
-            Openイシューの担当者でマイルストーンを整理 · {schedule.rangeLabel}
+            Issueの担当者別に、進行中と完了を整理 · {schedule.rangeLabel}
           </p>
         </div>
         {onToggleFull && (
@@ -174,7 +181,7 @@ export default function ExecutiveScheduleView({
 
       <dl aria-label="大日程の集計" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: "10px", margin: "14px 0 18px" }}>
         {[
-          ["稼働メンバー", schedule.people, T.primary],
+          ["表示レーン", schedule.people, T.primary],
           ["進行中", schedule.open, T.ink],
           ["マイルストーン", schedule.milestones, T.body],
           ["期限超過", schedule.overdue, schedule.overdue ? T.err : T.ok],
@@ -197,6 +204,8 @@ export default function ExecutiveScheduleView({
           schedule={schedule}
           repo={repo}
           defaultProtocol={gitlabProtocol}
+          openOnly={openOnly}
+          onOpenOnlyChange={setOpenOnly}
           fullscreen={fullscreen}
         />
       ) : (
@@ -206,12 +215,12 @@ export default function ExecutiveScheduleView({
         </div>
       )}
 
-      {schedule.unscheduled.length > 0 && (
+      {visibleUnscheduled.length > 0 && (
         <section aria-labelledby="unscheduled-title" style={{ marginTop: "20px", padding: fullscreen ? "18px" : "15px", border: "1px solid " + rgba(T.warn, 0.38), borderRadius: "12px", background: rgba(T.warn, 0.05) }}>
           <h3 id="unscheduled-title" style={{ margin: 0, color: rgb(T.ink), fontSize: fullscreen ? "20px" : "15px", textWrap: "balance" }}>日程未設定</h3>
           <p style={{ margin: "5px 0 12px", color: rgb(T.muted), fontSize: fullscreen ? "14px" : "12px", textWrap: "pretty" }}>開始日と期限の両方が揃うと、上のタイムラインに表示されます。</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: "9px" }}>
-            {schedule.unscheduled.map((group) => (
+            {visibleUnscheduled.map((group) => (
               <div key={group.name} style={{ padding: "11px 12px", border: "1px solid " + rgba(T.warn, 0.25), borderRadius: "8px", background: rgb(T.card) }}>
                 <div style={{ color: rgb(T.ink), fontSize: fullscreen ? "16px" : "13px", fontWeight: 700 }}>{group.name}</div>
                 <ul style={{ margin: "7px 0 0", padding: 0, listStyle: "none" }}>

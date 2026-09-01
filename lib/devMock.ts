@@ -114,6 +114,7 @@ const SEEDS: Seed[] = [
   { id: 206, title: "切替判定", labelName: "gate", color: "176 131 240", createdAt: "2026-08-04", dueDate: "2027-01-15", assignee: "佐藤 玲", milestone: "基盤移行", isCheckpoint: true },
   { id: 207, title: "次年度テーマ整理", labelName: "planning", color: "210 153 34", createdAt: "2026-08-02", assignee: "鈴木 花子", milestone: "次年度企画" },
   { id: 208, title: "未割当の横断課題", labelName: "ops", color: "210 153 34", createdAt: "2026-08-04", dueDate: "2026-09-10", assignee: "未割当", milestone: "プロダクト刷新" },
+  { id: 209, title: "運用引き継ぎ完了", labelName: "ops", color: "210 153 34", createdAt: "2026-08-02", dueDate: "2026-08-25", closedAt: "2026-08-24", assignee: "鈴木 花子", milestone: "運用移管完了" },
 ];
 
 const MILESTONES: Milestone[] = [
@@ -122,6 +123,8 @@ const MILESTONES: Milestone[] = [
   { id: 3, title: "プロダクト刷新", startDate: "2026-07-15", dueDate: "2026-10-31", state: "active" },
   { id: 4, title: "基盤移行", startDate: "2026-09-01", dueDate: "2027-01-31", state: "active" },
   { id: 5, title: "次年度企画", startDate: null, dueDate: "2026-12-18", state: "active" },
+  { id: 6, title: "運用移管完了", startDate: "2026-08-01", dueDate: "2026-08-25", state: "closed" },
+  { id: 7, title: "Issueなし完了", startDate: "2026-08-10", dueDate: "2026-08-20", state: "closed" },
 ];
 
 export function mockApiResponse(): ApiResponse {
